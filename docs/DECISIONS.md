@@ -26,6 +26,7 @@ plan where applicable.
 | D-018 | CERC meeting minutes (Commission, Central Advisory Committee, other meetings, Coordination Forum) and Commission-notified tariff inputs (coal price indices/CIL notifications and escalation rates) are tracked feeds. | Accepted |
 | D-019 | CERC repealed regulations, homepage annual archives, technical-validation letters, and dormant regulatory-affairs correspondence are excluded as independent feeds. | Accepted |
 | D-020 | CERC fetching uses a 120 s timeout, apex-to-www host fallback on connection-level failures, bounded retries, a run-level circuit breaker, and canonical-host identity. | Accepted |
+| D-021 | Ministry of Coal "Coal Gasification" mission page receives indirect coverage only; What's New captures its announcements. | Accepted |
 
 ### D-013 — Exclude Ministry of Power press releases and Parliament questions
 
@@ -111,6 +112,33 @@ plan where applicable.
   `rate_limit_shared_across_hosts`) to the contract schema. Feed URLs stay on
   the apex host.
 - Supersedes: None.
+
+### D-021 — Coal Gasification mission page is indirect
+
+- Date: 2026-10-23
+- Status: Accepted (confirmed by the user)
+- Decision: The Ministry of Coal Coal Gasification page
+  (`/major-statistics/national-coal-gasification-mission`) is not a tracked
+  feed. It receives indirect coverage in the narrative and thematic pages group
+  (sitemap link-set comparison). Its announcements are captured through the
+  tracked What's New feed (`coal_whats_new`) under D-001.
+- Rationale: The 2026-10-23 re-verification found that the page is an active
+  scheme dossier, not a static narrative page, and proposed tracking it. The
+  user chose indirect coverage because the scheme's new material (approvals,
+  RFPs, pre-application notices, query responses) is announced in What's New,
+  which is already tracked with full history.
+- Compatibility or migration impact: None; no state exists yet. Known limit:
+  files posted only on this page are not baselined or tracked independently.
+  At verification the page held 59 rows with 57 distinct hrefs in nine section
+  tables (one nested), dated 16/09/2026 back to 21/09/2021, including RFPs
+  dated 13.08.2026. Unannounced additions or edits to the page are not
+  detected. The page shape is kept as the fixture
+  `tests/fixtures/ministry_of_coal/coal_gasification.html`. Promoting the page
+  to a tracked feed later is a coverage expansion that increments
+  `coverage_revision` and silently baselines the new feed.
+- Supersedes: None. Consistent with D-015 and D-016, which leave other
+  Ministry of Coal pages without independent feeds when What's New or another
+  tracked feed carries their material.
 
 ## Decision template
 

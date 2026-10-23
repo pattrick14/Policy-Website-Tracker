@@ -444,7 +444,6 @@ sites:
       - coal_minutes_of_meetings
       - coal_production_reviews
       - coal_operationalisation_reviews
-      - coal_gasification
     # D-017: coal.nic.in serves an HTTP 200 CAPTCHA page above roughly 0.8 req/s.
     request_rate_per_host_per_second: 0.25
     coverage_decisions:
@@ -522,15 +521,6 @@ sites:
         refresh_policy: {weekly: full table per feed plus both minutes-archive pages, historical: full enumeration weekly}
         fixtures: [tests/fixtures/ministry_of_coal/minutes_of_meetings.html, tests/fixtures/ministry_of_coal/minutes_archive.html, tests/fixtures/ministry_of_coal/review_minutes_table.html]
         last_verified: '2026-10-23'
-      # --- Tracked feed added by the 2026-10-23 re-verification (needs a recorded decision; see coal_reverification.md) ---
-      - scope: Coal Gasification (/major-statistics/national-coal-gasification-mission); feed coal_gasification
-        decision: track
-        reason: Re-verification on 2026-10-23 found an active publication collection, not a narrative page. It holds the Scheme for promotion of Coal/Lignite Gasification approval, RFPs, pre-application notices, query responses, and earlier roadmap and seminar material. There are 59 dated rows in nine section tables (one nested), newest 16/09/2026. The earlier indirect decision was made from sitemap evidence only.
-        evidence_urls: [https://www.coal.nic.in/major-statistics/national-coal-gasification-mission, https://www.coal.nic.in/sitemap]
-        coverage_limit: Section headings are page layout, not authoritative categories. Files are absolute coal.gov.in links (mixed http/https, some with a doubled path slash). Items also announced in What's New are appearances of the same document.
-        refresh_policy: {weekly: full page enumeration, historical: full enumeration weekly}
-        fixtures: [tests/fixtures/ministry_of_coal/coal_gasification.html]
-        last_verified: '2026-10-23'
       # --- Excluded or indirect by user decision ---
       - scope: Nominated Authority Scrutiny Committee, Single Window System, and Energy Cell pages (and their archives)
         decision: exclude
@@ -565,13 +555,13 @@ sites:
         refresh_policy: {weekly: compare sitemap link set, historical: not applicable}
         fixtures: [tests/fixtures/ministry_of_coal/sitemap.html]
         last_verified: '2026-10-23'
-      - scope: Narrative and thematic pages (Major Statistics narratives, Sustainability topic pages, Safety pages, Technology Roadmap, Achievements Flipbook, Chintan Shivir, Procurement Projection, About CSR, About NA, Allocation Tranche-Wise); Coal Gasification moved to coal_gasification on 2026-10-23
+      - scope: Narrative and thematic pages (Major Statistics narratives, Sustainability topic pages, Safety pages, Technology Roadmap, Achievements Flipbook, Chintan Shivir, Procurement Projection, About CSR, About NA, Allocation Tranche-Wise, Coal Gasification)
         decision: indirect
-        reason: Descriptive pages that are either text and inline tables only, or small static file sets unchanged since 2021-2024. Observed 2026-10-23 - Coal Grades, Coal Reserves, Safety Statistics (NLCIL tables to 2022), Safety Initiatives, About CSR, About SDC, Greening Initiatives, Mine Water Utilization, and Promoting Renewable have no files. Mission Coking Coal has 2 files (2021), Grading of Coal 2 (2022-2023 lignite-grading consultation), Coal Evacuation Plan 2 (Coal Logistics Policy, 2024), Clearances 1 (2024 compendium), Technology Roadmap 4 (2022), Procurement Projection 2 (2021), Chintan Shivir 3 (2021), and Achievements Flipbook 1 PDF plus four coal.gov.in flipbook HTML links. New policy material from them is expected to surface in What's New.
-        evidence_urls: [https://www.coal.nic.in/major-statistics/coal-demand-projections, https://www.coal.nic.in/major-statistics/import-and-export, https://www.coal.nic.in/major-statistics/grading-coal, https://www.coal.nic.in/major-statistics/coal-evacuation-plan, https://www.coal.nic.in/techno-roadmap-coal-sector, https://www.coal.nic.in/nominated-authority/about-na, https://www.coal.nic.in/nominated-authority/allocation-tranche-wise, https://www.coal.nic.in/sitemap]
-        coverage_limit: Unannounced edits to these pages, including a new file added to one of the small static tables, are not detected. Coal Evacuation Plan and Clearances also contain escaped HTML table rows rendered as text, which are not live links. Never fetched in any session - /major-statistics/safety-coal-mines (About Safety), /safety-coal-mines/accident-portal, and the SDC pages air-quality-management, eco-tourism-in-mining-area, energy-efficiency, gainful-utilization, and sdc-videoes.
+        reason: Descriptive pages that are either text and inline tables only, or small static file sets unchanged since 2021-2024. Observed 2026-10-23 - Coal Grades, Coal Reserves, Safety Statistics (NLCIL tables to 2022), Safety Initiatives, About CSR, About SDC, Greening Initiatives, Mine Water Utilization, and Promoting Renewable have no files. Mission Coking Coal has 2 files (2021), Grading of Coal 2 (2022-2023 lignite-grading consultation), Coal Evacuation Plan 2 (Coal Logistics Policy, 2024), Clearances 1 (2024 compendium), Technology Roadmap 4 (2022), Procurement Projection 2 (2021), Chintan Shivir 3 (2021), and Achievements Flipbook 1 PDF plus four coal.gov.in flipbook HTML links. New policy material from them is expected to surface in What's New. Coal Gasification (/major-statistics/national-coal-gasification-mission) is indirect by D-021 - the 2026-10-23 re-verification found an active scheme dossier (the Scheme for promotion of Coal/Lignite Gasification approval, RFPs dated 13.08.2026, pre-application notices, query responses, roadmap, seminar and investor-meet material; 59 rows with 57 distinct hrefs in nine section tables, one nested, dated 16/09/2026 back to 21/09/2021; no pager or archive), and the user chose indirect coverage because What's New, which is tracked, captures its announcements.
+        evidence_urls: [https://www.coal.nic.in/major-statistics/coal-demand-projections, https://www.coal.nic.in/major-statistics/import-and-export, https://www.coal.nic.in/major-statistics/grading-coal, https://www.coal.nic.in/major-statistics/coal-evacuation-plan, https://www.coal.nic.in/techno-roadmap-coal-sector, https://www.coal.nic.in/nominated-authority/about-na, https://www.coal.nic.in/nominated-authority/allocation-tranche-wise, https://www.coal.nic.in/major-statistics/national-coal-gasification-mission, https://www.coal.nic.in/sitemap]
+        coverage_limit: Unannounced edits to these pages, including a new file added to one of the small static tables, are not detected. Coal Evacuation Plan and Clearances also contain escaped HTML table rows rendered as text, which are not live links. Never fetched in any session - /major-statistics/safety-coal-mines (About Safety), /safety-coal-mines/accident-portal, and the SDC pages air-quality-management, eco-tourism-in-mining-area, energy-efficiency, gainful-utilization, and sdc-videoes; these seven pages are an accepted coverage limit and remain indirect because every fetched sibling was text-only. D-021 limit - Coal Gasification files posted only on that page (59 rows, 57 distinct hrefs, RFPs dated 13.08.2026 at verification) are not baselined or tracked independently; only their What's New appearances are captured.
         refresh_policy: {weekly: sitemap link-set compare and What's New capture, historical: not applicable}
-        fixtures: [tests/fixtures/ministry_of_coal/sitemap.html, tests/fixtures/ministry_of_coal/whats_new.html, tests/fixtures/ministry_of_coal/narrative_static_tables.html]
+        fixtures: [tests/fixtures/ministry_of_coal/sitemap.html, tests/fixtures/ministry_of_coal/whats_new.html, tests/fixtures/ministry_of_coal/narrative_static_tables.html, tests/fixtures/ministry_of_coal/coal_gasification.html]
         last_verified: '2026-10-23'
       # --- Excluded: generic, administrative, operational ---
       - scope: Generic organisation and site pages (About Us children, Who's Who, Ministers/minister profiles, Organisations, Contact Us, Help, Screen Reader Access, Website Policy, Terms, Disclaimer, Feedback, Web Information Manager, Technical Help Desk)
@@ -624,7 +614,7 @@ sites:
         refresh_policy: {weekly: none, historical: research re-check only}
         fixtures: [tests/fixtures/ministry_of_coal/nested_report_detail.html, tests/fixtures/ministry_of_coal/hindi_whats_new_block.html, tests/fixtures/ministry_of_coal/site_search_results.html]
         last_verified: '2026-10-23'
-    research_status: preliminary
+    research_status: complete
     feeds:
       - id: coal_sitemap
         purpose: Enumerate navigation branches and drive explicit track, indirect, or exclude decisions.
@@ -1035,24 +1025,6 @@ sites:
         fixtures: [tests/fixtures/ministry_of_coal/review_minutes_table.html, tests/fixtures/ministry_of_coal/captcha_block.html]
         verified: true
         last_verified: '2026-10-22'
-      # Added by the 2026-10-23 re-verification; the page was previously indirect from sitemap evidence only.
-      # Needs a recorded product decision (see docs/step1_pending/coal_reverification.md).
-      - id: coal_gasification
-        <<: *coal_direct_table
-        purpose: Track the Coal Gasification publication collection (Scheme for promotion of Coal/Lignite Gasification, RFPs, notices, query responses, roadmap, and seminar material).
-        url: https://www.coal.nic.in/major-statistics/national-coal-gasification-mission
-        enumeration: {method: every Title/Attachment/Date section table on the one page (nine section tables; one table is nested inside the investors-meet section), termination: end of the last section table}
-        identity: {native_ids: [attachment href], fallback: section heading plus row provenance and source-scoped canonical URL; hrefs are absolute coal.gov.in URLs in mixed http/https and some carry a doubled path slash (https://coal.gov.in//sites/...); keep the raw href and do not merge on a normalised href without a tested rule}
-        date_semantics: {displayed: DD/MM/YYYY row date (one row undated), uploaded: URL path is not authoritative, first_seen: tracker discovery time}
-        completeness:
-          removal_authority: false
-          failure_indicators: [missing Coal Gasification heading, fewer than nine section tables, unexpected row-count collapse, CAPTCHA Validation request page, block page]
-          notes: Sections are page layout and may be reorganised, so removal is not inferred. Many rows are also announced in What's New with the same file; those are appearances of one document.
-        history: {boundary: 59 rows with 59 links (57 distinct hrefs) in ten HTML tables (nine sections plus one nested table) dated 16/09/2026 back to 21/09/2021; one undated row; no pager and no archive link, boundary_verified: true}
-        evidence_urls: [https://www.coal.nic.in/major-statistics/national-coal-gasification-mission, https://www.coal.nic.in/sitemap]
-        fixtures: [tests/fixtures/ministry_of_coal/coal_gasification.html]
-        verified: true
-        last_verified: '2026-10-23'
 
   - id: cerc
     name: Central Electricity Regulatory Commission
