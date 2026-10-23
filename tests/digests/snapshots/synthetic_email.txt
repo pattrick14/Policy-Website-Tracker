@@ -1,0 +1,87 @@
+Subject: Policy tracker: Week of 26 Oct 2026 - 3 action, 9 update(s) [PARTIAL]
+
+Policy tracker digest - Week of 26 Oct 2026
+Run 20261026T023000Z-abcdef12
+
+PARTIAL DIGEST: some feeds failed or were incomplete. Their known records were kept and nothing was reported as removed. See Source health.
+GAP WARNING: The previous run was 14 days ago (2026-10-12T02:30:00Z). This digest covers everything found since then, but items that appeared and left rolling feeds in the gap may have been missed.
+
+== Action required and deadline changes (3) ==
+
+* Draft CERC (Connectivity) Regulations, 2026 <script>alert(1)</script>
+  Action required | cerc / cerc_draft_regulations | New document
+  Published: 12.10.2026 (2026-10-12); first seen: 2026-10-26
+  Deadline: 15 Nov 2026, 17:00 IST
+    Evidence: Comments may be submitted on or before 15.11.2026 by 5:00 PM.
+  https://cercind.gov.in/d1.pdf
+
+* [DEADLINE CHANGED] Extension of last date for comments on Draft Tariff Regulations till 30.11.2026
+  Action required | cerc / cerc_draft_regulations | Listing details changed (title)
+  Published: 12.10.2026 (2026-10-12); first seen: 2026-09-01
+  Deadline changed: 30 Nov 2026 (time not stated) (previously: 1 Nov 2026 (time not stated))
+    Evidence: Extension of last date for comments on Draft Tariff Regulations till 30.11.2026
+  https://cercind.gov.in/d7.pdf
+
+* [DEADLINE CHANGED] Draft Amendment to Sharing Regulations
+  Action required | cerc / cerc_draft_regulations | Deadline changed
+  Published: 12.10.2026 (2026-10-12); first seen: 2026-09-01
+  Deadline changed: 10 Dec 2026 (time not stated) (previously: none)
+    Evidence: Stakeholders may send comments on or before 10th December, 2026.
+  https://cercind.gov.in/d8.pdf
+
+== Law and policy (2) ==
+
+* =HYPERLINK("http://evil") Guidelines on Resource Adequacy
+  Policy and direction | ministry_of_power / mop_documents | Listing details changed (title)
+  Published: 12.10.2026 (2026-10-12); first seen: 2026-09-01
+  https://powermin.gov.in/d2.pdf
+
+* Order in Suo Motu Petition No. 3/SM/2026 on market coupling
+  Policy and direction | cerc / cerc_recent_rops | New document
+  Published: 12.10.2026 (2026-10-12); first seen: 2026-10-26
+  https://cercind.gov.in/d4.pdf
+
+== Reports and research (1) ==
+
+* Provisional Coal Statistics September 2026
+  Research and reporting | ministry_of_coal / coal_monthly_statistics | New document
+  Published: 12.10.2026 (2026-10-12); first seen: 2026-10-26
+  Warning: Document is Hindi-only; English listing details shown
+  https://coal.nic.in/d5.pdf
+
+== Other updates (2) ==
+
+* Minister visits thermal plant
+  Unclassified | ministry_of_power / mop_documents | New document
+  Published: not stated; first seen: 2026-10-26
+  Warning: Scanned document; no text layer
+  Warning: OCR unavailable
+  https://powermin.gov.in/d10.pdf
+
+* Notice [click](javascript:alert(1)) *bold* | pipe
+  Unclassified | cerc / cerc_public_notices | New document - Backfill: newly covered history (not a new publication)
+  Published: 03.04.2019 (2019-04-03); first seen: 2026-10-26
+
+== Routine appendix (1) ==
+
+- Record of Proceedings in Petition No. 12/MP/2026 | cerc_recent_rops | 12.10.2026 | New document
+
+== Coverage notes ==
+
+- Coverage for cerc_public_notices expanded to revision 2; newly covered history is labelled "Backfill: newly covered history".
+- Coverage initialized for cerc_study_reports: 42 existing records were recorded silently as the baseline and are not reported as new.
+- Same-URL file replacements are detected from server validators (ETag, Last-Modified, size) and listing metadata after the first download. A server can replace a file without changing these, and such a replacement is not detected (D-008).
+
+== Source health ==
+
+6 of 7 feeds collected completely.
+- coal_whats_new (ministry_of_coal): not accepted, enumeration unknown, baseline complete, reasons: fetch_failed, consecutive failures: 2
+
+== Archive ==
+
+- digests/2026/10/20261026T023000Z-abcdef12.md: https://github.com/example/tracker/blob/tracker-data/digests/2026/10/20261026T023000Z-abcdef12.md
+- digests/2026/10/20261026T023000Z-abcdef12.csv: https://github.com/example/tracker/blob/tracker-data/digests/2026/10/20261026T023000Z-abcdef12.csv
+- digests/2026/10/20261026T023000Z-abcdef12.json: https://github.com/example/tracker/blob/tracker-data/digests/2026/10/20261026T023000Z-abcdef12.json
+- open_deadlines.csv: https://github.com/example/tracker/blob/tracker-data/open_deadlines.csv
+
+The digest CSV and open_deadlines.csv are attached.

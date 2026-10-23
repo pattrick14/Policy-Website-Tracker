@@ -1,0 +1,481 @@
+{
+  "gap_warning": "The previous run was 14 days ago (2026-10-12T02:30:00Z). This digest covers everything found since then, but items that appeared and left rolling feeds in the gap may have been missed.",
+  "generated_at": "2026-10-26T02:30:00Z",
+  "health": [
+    {
+      "accepted": true,
+      "baseline_status": "complete",
+      "consecutive_failures": 0,
+      "enumeration_status": "complete",
+      "feed_id": "cerc_draft_regulations",
+      "item_count": 10,
+      "quarantine_reasons": [],
+      "site_id": "cerc"
+    },
+    {
+      "accepted": true,
+      "baseline_status": "complete",
+      "consecutive_failures": 0,
+      "enumeration_status": "complete",
+      "feed_id": "cerc_public_notices",
+      "item_count": 10,
+      "quarantine_reasons": [],
+      "site_id": "cerc"
+    },
+    {
+      "accepted": true,
+      "baseline_status": "complete",
+      "consecutive_failures": 0,
+      "enumeration_status": "complete",
+      "feed_id": "cerc_recent_rops",
+      "item_count": 10,
+      "quarantine_reasons": [],
+      "site_id": "cerc"
+    },
+    {
+      "accepted": true,
+      "baseline_status": "complete",
+      "consecutive_failures": 0,
+      "enumeration_status": "complete",
+      "feed_id": "cerc_study_reports",
+      "item_count": 10,
+      "quarantine_reasons": [],
+      "site_id": "cerc"
+    },
+    {
+      "accepted": true,
+      "baseline_status": "complete",
+      "consecutive_failures": 0,
+      "enumeration_status": "complete",
+      "feed_id": "coal_monthly_statistics",
+      "item_count": 10,
+      "quarantine_reasons": [],
+      "site_id": "ministry_of_coal"
+    },
+    {
+      "accepted": false,
+      "baseline_status": "complete",
+      "consecutive_failures": 2,
+      "enumeration_status": "unknown",
+      "feed_id": "coal_whats_new",
+      "item_count": 0,
+      "quarantine_reasons": [
+        "fetch_failed"
+      ],
+      "site_id": "ministry_of_coal"
+    },
+    {
+      "accepted": true,
+      "baseline_status": "complete",
+      "consecutive_failures": 0,
+      "enumeration_status": "complete",
+      "feed_id": "mop_documents",
+      "item_count": 10,
+      "quarantine_reasons": [],
+      "site_id": "ministry_of_power"
+    }
+  ],
+  "items": [
+    {
+      "category": "action_required",
+      "deadline_changed": false,
+      "deadlines": [
+        {
+          "ambiguous": false,
+          "date": "2026-11-15",
+          "evidence": "Comments may be submitted on or before 15.11.2026 by 5:00 PM.",
+          "method": "text_regex",
+          "raw": "15.11.2026",
+          "sort_key": "2026-11-15T17:00:00+05:30",
+          "time": "17:00"
+        }
+      ],
+      "details": {
+        "other_events": "new_appearance"
+      },
+      "discovery": "live",
+      "entity_key": "d1",
+      "event_id": "ev-d1-new_document-cerc_draft_regulations",
+      "event_type": "new_document",
+      "feed_id": "cerc_draft_regulations",
+      "first_seen_at": "2026-10-26T02:00:00Z",
+      "published_date": "2026-10-12",
+      "published_raw": "12.10.2026",
+      "reasons": [
+        "title:rules_and_regulation:regulation",
+        "text:action_required:comments invited"
+      ],
+      "section": "action",
+      "site_id": "cerc",
+      "title": "Draft CERC (Connectivity) Regulations, 2026 <script>alert(1)</script>",
+      "url": "https://cercind.gov.in/d1.pdf",
+      "warnings": []
+    },
+    {
+      "category": "action_required",
+      "deadline_changed": true,
+      "deadlines": [
+        {
+          "ambiguous": false,
+          "date": "2026-11-30",
+          "evidence": "Extension of last date for comments on Draft Tariff Regulations till 30.11.2026",
+          "method": "title_regex:extension",
+          "raw": "30.11.2026",
+          "sort_key": "2026-11-30T23:59:00+05:30",
+          "time": null
+        }
+      ],
+      "details": {
+        "changed_fields": "title",
+        "previous_deadlines": "1 Nov 2026 (time not stated)"
+      },
+      "discovery": "live",
+      "entity_key": "d7",
+      "event_id": "ev-d7-metadata_changed-cerc_draft_regulations",
+      "event_type": "metadata_changed",
+      "feed_id": "cerc_draft_regulations",
+      "first_seen_at": "2026-09-01T02:00:00Z",
+      "published_date": "2026-10-12",
+      "published_raw": "12.10.2026",
+      "reasons": [
+        "title:action_required:comment"
+      ],
+      "section": "action",
+      "site_id": "cerc",
+      "title": "Extension of last date for comments on Draft Tariff Regulations till 30.11.2026",
+      "url": "https://cercind.gov.in/d7.pdf",
+      "warnings": []
+    },
+    {
+      "category": "action_required",
+      "deadline_changed": true,
+      "deadlines": [
+        {
+          "ambiguous": false,
+          "date": "2026-12-10",
+          "evidence": "Stakeholders may send comments on or before 10th December, 2026.",
+          "method": "text_regex",
+          "raw": "10th December, 2026",
+          "sort_key": "2026-12-10T23:59:00+05:30",
+          "time": null
+        }
+      ],
+      "details": {
+        "previous_deadlines": "none"
+      },
+      "discovery": "live",
+      "entity_key": "d8",
+      "event_id": "efe83de4ad3f4c3da635c19b210a81e1",
+      "event_type": "deadline_changed",
+      "feed_id": "cerc_draft_regulations",
+      "first_seen_at": "2026-09-01T02:00:00Z",
+      "published_date": "2026-10-12",
+      "published_raw": "12.10.2026",
+      "reasons": [
+        "title:rules_and_regulation:regulation",
+        "text:action_required:stakeholders requested"
+      ],
+      "section": "action",
+      "site_id": "cerc",
+      "title": "Draft Amendment to Sharing Regulations",
+      "url": "https://cercind.gov.in/d8.pdf",
+      "warnings": []
+    },
+    {
+      "category": "policy_and_direction",
+      "deadline_changed": false,
+      "deadlines": [],
+      "details": {
+        "changed_fields": "title",
+        "title.new": "x",
+        "title.old": "Guidelines"
+      },
+      "discovery": "live",
+      "entity_key": "d2",
+      "event_id": "ev-d2-metadata_changed-mop_documents",
+      "event_type": "metadata_changed",
+      "feed_id": "mop_documents",
+      "first_seen_at": "2026-09-01T02:00:00Z",
+      "published_date": "2026-10-12",
+      "published_raw": "12.10.2026",
+      "reasons": [
+        "title:policy_and_direction:guideline"
+      ],
+      "section": "law_policy",
+      "site_id": "ministry_of_power",
+      "title": "=HYPERLINK(\"http://evil\") Guidelines on Resource Adequacy",
+      "url": "https://powermin.gov.in/d2.pdf",
+      "warnings": []
+    },
+    {
+      "category": "policy_and_direction",
+      "deadline_changed": false,
+      "deadlines": [],
+      "details": {},
+      "discovery": "live",
+      "entity_key": "d4",
+      "event_id": "ev-d4-new_document-cerc_recent_rops",
+      "event_type": "new_document",
+      "feed_id": "cerc_recent_rops",
+      "first_seen_at": "2026-10-26T02:00:00Z",
+      "published_date": "2026-10-12",
+      "published_raw": "12.10.2026",
+      "reasons": [
+        "promoted:suo motu",
+        "title:policy_and_direction:order"
+      ],
+      "section": "law_policy",
+      "site_id": "cerc",
+      "title": "Order in Suo Motu Petition No. 3/SM/2026 on market coupling",
+      "url": "https://cercind.gov.in/d4.pdf",
+      "warnings": []
+    },
+    {
+      "category": "research_and_reporting",
+      "deadline_changed": false,
+      "deadlines": [],
+      "details": {},
+      "discovery": "live",
+      "entity_key": "d5",
+      "event_id": "ev-d5-new_document-coal_monthly_statistics",
+      "event_type": "new_document",
+      "feed_id": "coal_monthly_statistics",
+      "first_seen_at": "2026-10-26T02:00:00Z",
+      "published_date": "2026-10-12",
+      "published_raw": "12.10.2026",
+      "reasons": [
+        "title:research_and_reporting:statistics"
+      ],
+      "section": "research",
+      "site_id": "ministry_of_coal",
+      "title": "Provisional Coal Statistics September 2026",
+      "url": "https://coal.nic.in/d5.pdf",
+      "warnings": [
+        "hindi_only"
+      ]
+    },
+    {
+      "category": "routine",
+      "deadline_changed": false,
+      "deadlines": [],
+      "details": {},
+      "discovery": "live",
+      "entity_key": "d10",
+      "event_id": "ev-d10-new_document-mop_documents",
+      "event_type": "new_document",
+      "feed_id": "mop_documents",
+      "first_seen_at": "2026-10-26T02:00:00Z",
+      "published_date": null,
+      "published_raw": null,
+      "reasons": [
+        "fallback:unclassified"
+      ],
+      "section": "other",
+      "site_id": "ministry_of_power",
+      "title": "Minister visits thermal plant",
+      "url": "https://powermin.gov.in/d10.pdf",
+      "warnings": [
+        "scanned",
+        "ocr_unavailable"
+      ]
+    },
+    {
+      "category": "routine",
+      "deadline_changed": false,
+      "deadlines": [],
+      "details": {
+        "discovery_label": "Backfill: newly covered history"
+      },
+      "discovery": "backfill",
+      "entity_key": "d6",
+      "event_id": "ev-d6-new_document-cerc_public_notices",
+      "event_type": "new_document",
+      "feed_id": "cerc_public_notices",
+      "first_seen_at": "2026-10-26T02:00:00Z",
+      "published_date": "2019-04-03",
+      "published_raw": "03.04.2019",
+      "reasons": [
+        "fallback:unclassified"
+      ],
+      "section": "other",
+      "site_id": "cerc",
+      "title": "Notice [click](javascript:alert(1)) *bold* | pipe",
+      "url": "javascript:alert(1)",
+      "warnings": []
+    },
+    {
+      "category": "routine",
+      "deadline_changed": false,
+      "deadlines": [],
+      "details": {},
+      "discovery": "live",
+      "entity_key": "d3",
+      "event_id": "ev-d3-new_document-cerc_recent_rops",
+      "event_type": "new_document",
+      "feed_id": "cerc_recent_rops",
+      "first_seen_at": "2026-10-26T02:00:00Z",
+      "published_date": "2026-10-12",
+      "published_raw": "12.10.2026",
+      "reasons": [
+        "feed_default:cerc_recent_rops",
+        "title:routine:record of proceedings"
+      ],
+      "section": "routine",
+      "site_id": "cerc",
+      "title": "Record of Proceedings in Petition No. 12/MP/2026",
+      "url": "https://cercind.gov.in/d3.pdf",
+      "warnings": []
+    }
+  ],
+  "kind": "digest",
+  "notes": [
+    "Coverage for cerc_public_notices expanded to revision 2; newly covered history is labelled \"Backfill: newly covered history\".",
+    "Coverage initialized for cerc_study_reports: 42 existing records were recorded silently as the baseline and are not reported as new.",
+    "Same-URL file replacements are detected from server validators (ETag, Last-Modified, size) and listing metadata after the first download. A server can replace a file without changing these, and such a replacement is not detected (D-008)."
+  ],
+  "open_deadlines": [
+    {
+      "category": "action_required",
+      "deadline_changed": false,
+      "deadlines": [
+        {
+          "ambiguous": false,
+          "date": "2026-11-15",
+          "evidence": "Comments may be submitted on or before 15.11.2026 by 5:00 PM.",
+          "method": "text_regex",
+          "raw": "15.11.2026",
+          "sort_key": "2026-11-15T17:00:00+05:30",
+          "time": "17:00"
+        }
+      ],
+      "details": {
+        "other_events": "new_appearance"
+      },
+      "discovery": "live",
+      "entity_key": "d1",
+      "event_id": "ev-d1-new_document-cerc_draft_regulations",
+      "event_type": "new_document",
+      "feed_id": "cerc_draft_regulations",
+      "first_seen_at": "2026-10-26T02:00:00Z",
+      "published_date": "2026-10-12",
+      "published_raw": "12.10.2026",
+      "reasons": [
+        "title:rules_and_regulation:regulation",
+        "text:action_required:comments invited"
+      ],
+      "section": "action",
+      "site_id": "cerc",
+      "title": "Draft CERC (Connectivity) Regulations, 2026 <script>alert(1)</script>",
+      "url": "https://cercind.gov.in/d1.pdf",
+      "warnings": []
+    },
+    {
+      "category": "action_required",
+      "deadline_changed": false,
+      "deadlines": [
+        {
+          "ambiguous": false,
+          "date": "2026-11-20",
+          "evidence": "Study on ancillary services: comments by 20.11.2026",
+          "method": "title_regex",
+          "raw": "20.11.2026",
+          "sort_key": "2026-11-20T23:59:00+05:30",
+          "time": null
+        }
+      ],
+      "details": {
+        "row_kind": "open_deadline"
+      },
+      "discovery": "baseline",
+      "entity_key": "d9",
+      "event_id": "",
+      "event_type": "new_document",
+      "feed_id": "cerc_study_reports",
+      "first_seen_at": "2026-10-26T02:00:00Z",
+      "published_date": "2026-10-12",
+      "published_raw": "12.10.2026",
+      "reasons": [
+        "title:action_required:comment"
+      ],
+      "section": "action",
+      "site_id": "cerc",
+      "title": "Study on ancillary services: comments by 20.11.2026",
+      "url": "https://cercind.gov.in/d9.pdf",
+      "warnings": []
+    },
+    {
+      "category": "action_required",
+      "deadline_changed": true,
+      "deadlines": [
+        {
+          "ambiguous": false,
+          "date": "2026-11-30",
+          "evidence": "Extension of last date for comments on Draft Tariff Regulations till 30.11.2026",
+          "method": "title_regex:extension",
+          "raw": "30.11.2026",
+          "sort_key": "2026-11-30T23:59:00+05:30",
+          "time": null
+        }
+      ],
+      "details": {
+        "changed_fields": "title",
+        "previous_deadlines": "1 Nov 2026 (time not stated)"
+      },
+      "discovery": "live",
+      "entity_key": "d7",
+      "event_id": "ev-d7-metadata_changed-cerc_draft_regulations",
+      "event_type": "metadata_changed",
+      "feed_id": "cerc_draft_regulations",
+      "first_seen_at": "2026-09-01T02:00:00Z",
+      "published_date": "2026-10-12",
+      "published_raw": "12.10.2026",
+      "reasons": [
+        "title:action_required:comment"
+      ],
+      "section": "action",
+      "site_id": "cerc",
+      "title": "Extension of last date for comments on Draft Tariff Regulations till 30.11.2026",
+      "url": "https://cercind.gov.in/d7.pdf",
+      "warnings": []
+    },
+    {
+      "category": "action_required",
+      "deadline_changed": true,
+      "deadlines": [
+        {
+          "ambiguous": false,
+          "date": "2026-12-10",
+          "evidence": "Stakeholders may send comments on or before 10th December, 2026.",
+          "method": "text_regex",
+          "raw": "10th December, 2026",
+          "sort_key": "2026-12-10T23:59:00+05:30",
+          "time": null
+        }
+      ],
+      "details": {
+        "previous_deadlines": "none"
+      },
+      "discovery": "live",
+      "entity_key": "d8",
+      "event_id": "efe83de4ad3f4c3da635c19b210a81e1",
+      "event_type": "deadline_changed",
+      "feed_id": "cerc_draft_regulations",
+      "first_seen_at": "2026-09-01T02:00:00Z",
+      "published_date": "2026-10-12",
+      "published_raw": "12.10.2026",
+      "reasons": [
+        "title:rules_and_regulation:regulation",
+        "text:action_required:stakeholders requested"
+      ],
+      "section": "action",
+      "site_id": "cerc",
+      "title": "Draft Amendment to Sharing Regulations",
+      "url": "https://cercind.gov.in/d8.pdf",
+      "warnings": []
+    }
+  ],
+  "partial": true,
+  "period_label": "Week of 26 Oct 2026",
+  "run_id": "20261026T023000Z-abcdef12",
+  "schema_version": 1
+}

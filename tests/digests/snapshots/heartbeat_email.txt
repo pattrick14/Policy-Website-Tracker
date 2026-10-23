@@ -1,0 +1,24 @@
+Subject: Policy tracker: Week of 26 Oct 2026 - no new items (heartbeat)
+
+Policy tracker digest - Week of 26 Oct 2026
+Run 20261026T023000Z-abcdef12
+
+No new or changed publications were found on tracked feeds this week.
+This heartbeat confirms that the tracker ran.
+
+== Coverage notes ==
+
+- Same-URL file replacements are detected from server validators (ETag, Last-Modified, size) and listing metadata after the first download. A server can replace a file without changing these, and such a replacement is not detected (D-008).
+
+== Source health ==
+
+2 of 2 feeds collected completely.
+
+== Archive ==
+
+- digests/2026/10/20261026T023000Z-abcdef12.md (tracker-data branch)
+- digests/2026/10/20261026T023000Z-abcdef12.csv (tracker-data branch)
+- digests/2026/10/20261026T023000Z-abcdef12.json (tracker-data branch)
+- open_deadlines.csv (tracker-data branch)
+
+The digest CSV and open_deadlines.csv are attached.

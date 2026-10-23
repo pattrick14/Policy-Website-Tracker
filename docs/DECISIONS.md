@@ -31,6 +31,7 @@ plan where applicable.
 | D-023 | State-engine semantics: one owning feed per record sets its metadata, removal counters ignore replays and stale observations, parser migrations apply silently, and event ids identify semantic changes. Feeds run live-first in feed-id order. | Accepted |
 | D-024 | Production fetching uses one policy-enforcing HttpFetcher per site (allowlist, public-IP and per-hop redirect checks, streamed size cap, rate limit, D-020 fallback and breaker); adapters detect block pages by content. | Accepted |
 | D-025 | Adapter identity rules: CERC documents are keyed by canonical URL with row-level matter ids; Coal linkless rows use a content hash; MoP documents are attachment ids resolved to files at enrichment; an undated sighting never clears a known date. | Accepted |
+| D-026 | Deadlines read numeric dates as DD/MM, flag ambiguous dates without a date, let a stated extension replace earlier dates, and report a change only for records and feeds that existed before the run; classification is rule-based from config/taxonomy.yaml. | Accepted |
 
 ### D-013 — Exclude Ministry of Power press releases and Parliament questions
 
@@ -250,6 +251,28 @@ plan where applicable.
   hearing's text gives it a new key. Live page shapes could not be rechecked
   from this environment (proxy refusal), so adapters rest on the Step 1
   fixtures.
+- Supersedes: None.
+
+### D-026 — Deadline extraction and digest classification rules
+
+- Date: 2026-10-23
+- Status: Accepted (Step 6 engineering decision)
+- Decision: Numeric dates are read as DD/MM (Indian convention). A date counts
+  as a deadline only in a sentence with a deadline topic and cue; ambiguous
+  dates (two-digit year, impossible, MM/DD-only, or no year) are flagged with
+  no date and left out of `open_deadlines.csv`. A stated extension replaces
+  earlier non-extension dates in the same record. A deadline change is
+  reported only for records that existed before the run, on feeds that were
+  live before it; the first deadline index is built silently, and an
+  evidence-only change is not a deadline change. Classification is
+  deterministic and driven by `config/taxonomy.yaml` (schema version 2): a
+  routine gate with promotion terms, then title rules, feed defaults, and text
+  terms, falling back to "Other updates".
+- Rationale: D-004 and D-007; avoids re-alerting on wording-only changes and
+  keeps ambiguous dates visible without guessing.
+- Compatibility or migration impact: None. The rules are first-pass
+  heuristics, not yet tuned against live listings, and change only by editing
+  the taxonomy file.
 - Supersedes: None.
 
 ## Decision template
