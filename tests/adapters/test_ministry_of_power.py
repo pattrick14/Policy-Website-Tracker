@@ -19,7 +19,6 @@ from policy_tracker.core.models import (
     BaselineStatus,
     CatalogState,
     Discovery,
-    EntityKind,
     EventType,
 )
 from policy_tracker.core.observations import FeedObservation
@@ -552,11 +551,9 @@ def test_engine_silent_baseline_then_live_new_document(adapter, contracts) -> No
     assert new_docs[0].discovery is Discovery.LIVE
     added = outcome.state.documents["ministry_of_power:document:id:6013"]
     assert added.matter_key == "ministry_of_power:matter:id:7002"
-    # The parent's modified timestamp changed with the new attachment.
-    changed = [e for e in outcome.events if e.event_type is EventType.METADATA_CHANGED]
-    assert [(e.entity_kind, e.details["changed_fields"]) for e in changed] == [
-        (EntityKind.MATTER, "metadata.post_modified")
-    ]
+    # The parent's WordPress modified timestamp is not metadata, so the new attachment
+    # is the only change reported.
+    assert [e for e in outcome.events if e.event_type is EventType.METADATA_CHANGED] == []
 
 
 def test_engine_quarantines_blocked_and_incomplete_runs(adapter, contracts) -> None:

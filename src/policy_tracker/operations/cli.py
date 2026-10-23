@@ -121,6 +121,19 @@ def _max_documents(args: argparse.Namespace) -> int:
     return value
 
 
+DEFAULT_REVALIDATE_DOCUMENTS = 150
+
+
+def _revalidate_documents() -> int:
+    """``TRACKER_REVALIDATE_DOCUMENTS``, else 150 already-hashed files rechecked per run."""
+
+    raw = os.environ.get("TRACKER_REVALIDATE_DOCUMENTS", "").strip()
+    value = int(raw) if raw else DEFAULT_REVALIDATE_DOCUMENTS
+    if value < 0:
+        raise ValueError("revalidate documents must be zero or positive")
+    return value
+
+
 def default_services(args: argparse.Namespace, *, deliver: bool) -> pipeline.Services:
     """Production collaborators. SMTP settings load only when this run must email."""
 
@@ -131,7 +144,10 @@ def default_services(args: argparse.Namespace, *, deliver: bool) -> pipeline.Ser
         publisher=_publisher(args),
         fetcher_state=fetcher_state,
     )
-    services.enrich_options = {"max_documents": _max_documents(args)}
+    services.enrich_options = {
+        "max_documents": _max_documents(args),
+        "revalidate": _revalidate_documents(),
+    }
     if deliver:
         settings = smtp.settings_from_env()
         services.recipients = smtp.recipients_from_env()

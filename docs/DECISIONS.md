@@ -33,6 +33,7 @@ plan where applicable.
 | D-025 | Adapter identity rules: CERC documents are keyed by canonical URL with row-level matter ids; Coal linkless rows use a content hash; MoP documents are attachment ids resolved to files at enrichment; an undated sighting never clears a known date. | Accepted |
 | D-026 | Deadlines read numeric dates as DD/MM, flag ambiguous dates without a date, let a stated extension replace earlier dates, and report a change only for records and feeds that existed before the run; classification is rule-based from config/taxonomy.yaml. | Accepted |
 | D-027 | Delivery uses a per-run outbox bundle, Message-ID `<run_id.digest.policy-tracker@domain>`, compare-and-swap pushes to `tracker-data`, a pending delivery that blocks new crawls until sent or explicitly abandoned, and a workflow `mode` input for the silent baseline. | Accepted |
+| D-028 | Each run rechecks a rotating batch of already-hashed documents (least recently verified first, `TRACKER_REVALIDATE_DOCUMENTS`, default 150) in addition to event-touched and unhashed ones. | Accepted |
 
 ### D-013 — Exclude Ministry of Power press releases and Parliament questions
 
@@ -300,6 +301,22 @@ plan where applicable.
   silently skipping a digest, and no history overwrite under concurrency.
 - Compatibility or migration impact: None. Workflows and real SMTP were tested
   only offline (local bare repositories and a fake SMTP server).
+- Supersedes: None.
+
+### D-028 — Rotating document revalidation
+
+- Date: 2026-10-23
+- Status: Accepted (Step 8 fix)
+- Decision: Besides documents touched by this run's events and documents with
+  no version yet (capped by `TRACKER_MAX_DOCUMENTS`, default 200), every run
+  revalidates up to `TRACKER_REVALIDATE_DOCUMENTS` (default 150) already-hashed
+  active documents, least recently verified first, using conditional requests
+  (D-008).
+- Rationale: The Step 8 acceptance drill showed that a file replaced under an
+  unchanged listing was otherwise never requested again. Rechecking every file
+  every week would exceed the Coal rate limit (D-017) on large collections.
+- Compatibility or migration impact: None. A full cycle takes roughly
+  (active documents ÷ 150) weeks; raise the variable to shorten it.
 - Supersedes: None.
 
 ## Decision template

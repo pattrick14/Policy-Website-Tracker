@@ -10,6 +10,7 @@ is the only JSON writer: sorted keys, UTF-8, two-space indent, trailing newline.
 from __future__ import annotations
 
 import dataclasses
+import functools
 import hashlib
 import json
 import types
@@ -85,6 +86,7 @@ def from_data[T](cls: type[T], data: Any) -> T:
     return _convert(cls, data, cls.__name__)
 
 
+@functools.cache
 def _hints(cls: type) -> dict[str, Any]:
     return typing.get_type_hints(cls)
 

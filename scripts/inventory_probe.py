@@ -48,7 +48,7 @@ def fetch(url: str, timeout: float) -> tuple[str, str, str]:
             "User-Agent": "policy-website-tracker-research/0.1",
         },
     )
-    with urlopen(request, timeout=timeout) as response:  # noqa: S310 - explicit research URL
+    with urlopen(request, timeout=timeout) as response:
         content_type = response.headers.get_content_type()
         charset = response.headers.get_content_charset() or "utf-8"
         return response.geturl(), content_type, response.read().decode(charset, errors="replace")

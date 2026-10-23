@@ -1,8 +1,8 @@
 # Architecture Context
 
-> This document records the approved target architecture. Step 2 implemented the
-> `core/` contracts, state engine, store, and CLI; adapters, documents,
-> reporting, and delivery follow in Steps 3–7.
+> This document records the approved architecture, implemented in Steps 2–7.
+> Implementation notes: `docs/STATE_ENGINE.md`, `docs/FETCHING.md`,
+> `docs/DATA_LAYOUT.md`, `docs/OPERATIONS.md`, and `docs/ACCEPTANCE.md`.
 
 ## Component flow
 

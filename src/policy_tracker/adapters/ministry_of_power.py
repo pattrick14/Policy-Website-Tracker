@@ -293,7 +293,6 @@ def _emit_post(
     for key, value in (
         ("post_slug", _text(post.get("post_slug"))),
         ("post_date", wp_datetime_iso(post.get("post_date")) or ""),
-        ("post_modified", wp_datetime_iso(post.get("post_modified")) or ""),
         ("type", _text(acf.get("type"))),
     ):
         if value:

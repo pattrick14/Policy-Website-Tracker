@@ -6,10 +6,10 @@ Last updated: 2026-10-23
 
 - Planning: complete.
 - Repository documentation scaffold: complete.
-- Runtime implementation: Step 2 core contracts, state engine, store, and CLI complete; no source adapters yet.
+- Runtime implementation: Steps 2–7 complete; Step 8 offline acceptance complete. Live acceptance (L1–L4) needs network access to the sites and SMTP credentials.
 - Source inventory: all three sites `research_status: complete`; the strict gate passes; reviewed and approved by the user on 2026-10-23.
-- Tests and fixtures: Step 1 validator/probe tests and sanitized representative fixtures, all listed in `tests/fixtures/README.md`.
-- Git repository: initialized locally on `main`; `origin` set to `pattrick14/policy-website-tracker` (not yet pushed or verified).
+- Tests: 896 pass and 4 live-only tests are skipped (`python -m pytest -q`); sanitized fixtures are listed in `tests/fixtures/README.md`.
+- Git repository: work is on branch `claude/keen-faraday-trctv1` of `pattrick14/policy-website-tracker`, not yet merged to `main`.
 
 ## Step status
 
@@ -17,21 +17,22 @@ Last updated: 2026-10-23
 |---|---|---|
 | 1. Website research and repository bootstrap | Complete | Inventory approved by the user on 2026-10-23. |
 | 2. Core contracts and state engine | Complete | Contracts frozen; see the Step 2 handoff at the end. |
-| 3. Ministry of Power adapter | Ready to start | Step 2 contracts are merged; Steps 3–5 may run in parallel. |
-| 4. Ministry of Coal adapter | Ready to start | Step 2 contracts are merged; Steps 3–5 may run in parallel. |
-| 5. CERC adapter | Ready to start | Step 2 contracts are merged; Steps 3–5 may run in parallel. |
-| 6. Enrichment and digest generation | Not started | Depends on adapters. |
-| 7. GitHub and SMTP operations | Not started | Depends on complete digest pipeline. |
-| 8. Acceptance and adversarial review | Not started | Final gate. |
+| 3. Ministry of Power adapter | Complete (offline) | Fixture-tested; live page shapes not rechecked (sandbox proxy refused the sites). |
+| 4. Ministry of Coal adapter | Complete (offline) | Fixture-tested; live page shapes not rechecked (sandbox proxy refused the sites). |
+| 5. CERC adapter | Complete (offline) | Fixture-tested; live page shapes not rechecked (sandbox proxy refused the sites). |
+| 6. Enrichment and digest generation | Complete | Bounded enrichment, classification, deadlines, renderers. |
+| 7. GitHub and SMTP operations | Complete (offline) | Outbox, SMTP, tracker-data publishing, workflows; not yet run on GitHub. |
+| 8. Acceptance and adversarial review | Offline complete; live pending | 14 drills pass; review findings fixed; live steps L1–L4 in `docs/ACCEPTANCE.md`. |
 
 ## Exact next task
 
-Start Steps 3–5 (the three source adapters), which may run in parallel. Each
-adapter implements `policy_tracker.adapters.base.Adapter`, registers in
-`policy_tracker.adapters.registry`, and is tested against the sanitized
-fixtures. Step 3 also provides the production HTTP fetcher (the CLI's default
-fetcher is a placeholder returning `no_fetcher`). Follow the Step 2 handoff at
-the end of this file.
+Deployment and live acceptance by an operator (`docs/ACCEPTANCE.md` section 4,
+`docs/OPERATIONS.md`): merge the branch to `main`, set the SMTP variables and
+secrets, run `init-data-branch.yml`, run `tracker.yml` with `mode=baseline`
+until every feed's baseline is complete (L1), compare live totals with
+`docs/SOURCE_INVENTORY.md` (L2), and send one controlled email (L3). Fix any
+adapter whose live page shape differs from its fixtures, bumping that feed's
+`parser_version`.
 
 ## Step 1 exit evidence
 
@@ -459,9 +460,9 @@ Coal identity rules for mixed-scheme and doubled-slash coal.gov.in hrefs, and a
 note that full Coal enumeration costs about 90 requests, roughly 6 minutes at
 0.25 req/s) still apply.
 
-## Authoritative handoff — 2026-10-23 (Step 2 complete)
+## Handoff — 2026-10-23 (Step 2 complete; superseded)
 
-This section supersedes every earlier handoff and "exact next action" above.
+Superseded by the Steps 3–8 handoff below; kept for history.
 The user approved the Step 1 inventory on 2026-10-23.
 
 ### Delivered
@@ -511,3 +512,79 @@ The user approved the Step 1 inventory on 2026-10-23.
   CERC D-020 fallback and circuit breaker) and needs recorded fault cases in
   its tests.
 - A parser change bumps the feed's `parser_version` in config.
+
+## Authoritative handoff — 2026-10-23 (Steps 3–8 complete offline)
+
+This section supersedes every earlier handoff and "exact next action" above.
+
+### Delivered
+
+- **Fetching (D-024):** `adapters/http.py` (`HttpFetcher`, per-site
+  `fetcher_for`), `adapters/blocks.py` (content-based block pages), and
+  `adapters/replay.py` (`ReplayFetcher`). See `docs/FETCHING.md`.
+- **Adapters (D-025):** `ministry_of_power.py` (3 feeds), `ministry_of_coal.py`
+  (27), and `cerc.py` (24), all registered in `adapters/registry.py`.
+- **Enrichment (Step 6):** `documents/` covers full first acquisition with
+  signature checks, sandboxed pypdf extraction, OCR fallback (reports
+  `ocr_unavailable` when tesseract is absent), language detection, conditional
+  revalidation, and `content_replaced`. Ministry of Power attachment records
+  resolve to files. Every run rechecks `TRACKER_REVALIDATE_DOCUMENTS` (150)
+  documents, least recently verified first.
+- **Reporting (D-026):** `reporting/` covers rule-based classification from
+  `config/taxonomy.yaml`, evidence-backed deadlines, the digest, and the
+  Markdown/JSON/CSV/`open_deadlines.csv`/email renderers.
+- **Operations (D-027):** `operations/` covers the outbox, SMTP (STARTTLS or
+  SSL only), compare-and-swap `tracker-data` publishing, the durable delivery
+  sequence, and the CLI. `.github/workflows/` holds `tracker.yml`,
+  `init-data-branch.yml`, and `ci.yml`. See `docs/OPERATIONS.md`.
+- **Acceptance (Step 8):** `tests/acceptance/` runs 14 offline drills through
+  the real code path (`docs/ACCEPTANCE.md`).
+
+### Review and fixes
+
+An adversarial review found 11 issues, all fixed with regression tests:
+
+- **Ownership (D-023 revised):** authoritative feeds now own records over
+  rolling bulletins.
+- **Coal completeness:** empty pager pages and unpaged feeds that gain a pager
+  can no longer count as complete.
+- **Baseline mode:** it skips feeds that are already live.
+- **Fetcher (HTTP):**
+  - decompressed size is bounded;
+  - each request has a total deadline;
+  - https-to-http redirects and non-default ports are refused.
+- **Delivery pipeline:**
+  - an interrupted promotion now finishes instead of resending forever;
+  - dry runs no longer reset the data checkout;
+  - health is published only at promotion;
+  - the push token stays out of `.git/config` and child processes.
+- **Smaller fixes:** only open deadlines promote an item to Action required;
+  `content_replaced` is gated on feeds live before the run; Ministry of Power
+  `group_index` and `post_modified` no longer cause noise.
+
+The acceptance suite found two further bugs, both fixed: the open-deadlines
+view drifting on reruns, and files not being revalidated under an unchanged
+listing.
+
+### Validation
+
+- `python -m pytest -q`: 896 passed, 4 skipped (live-only).
+- `ruff check .`: clean.
+- `policy-tracker validate-config --config config/sources.yaml`: valid, 54
+  tracked feeds.
+- Live dry run from this environment: every site was refused by the sandbox
+  proxy, so every feed failed with recorded reasons and nothing was promoted,
+  as designed.
+
+### Known limits and open items
+
+- **Live checks not done:** page shapes and API responses have not been
+  rechecked against the live sites. Adapters rest on the Step 1 fixtures, and
+  several feeds have thin fixtures (listed in the Step 4 and 5 notes in the
+  commit history and `docs/ACCEPTANCE.md`).
+- **Classification:** the taxonomy rules are first-pass heuristics, to be
+  tuned against the first live digests.
+- **Push token:** it stays in the main process's memory during a run (see
+  `docs/OPERATIONS.md`).
+- **D-008:** a server that replaces bytes but keeps its validators and answers
+  304 is not detected.

@@ -354,7 +354,7 @@ def _item(
     if deadline_changed:
         details["previous_deadlines"] = _deadline_summary(previous_deadlines.get(key, ()))
     document = record if isinstance(record, Document) else None
-    url = record.canonical_url if record is not None else None
+    url = _display_url(record, texts.get(key))
     return DigestItem(
         event_id=event.event_id,
         event_type=event.event_type,
@@ -376,6 +376,17 @@ def _item(
     )
 
 
+def _display_url(record: Matter | Document | None, text: ExtractedText | None) -> str | None:
+    """The file enrichment resolved (e.g. a WordPress attachment record), else the canonical URL."""
+
+    if record is None:
+        return None
+    for warning in text.warnings if text is not None else ():
+        if warning.startswith("resolved:"):
+            return warning.removeprefix("resolved:")
+    return record.canonical_url
+
+
 def _open_deadlines(
     state: CatalogState,
     texts: Mapping[str, ExtractedText],
@@ -393,11 +404,10 @@ def _open_deadlines(
         record = _record(state, None, key)
         if not upcoming or record is None or record.status is not RecordStatus.ACTIVE:
             continue
-        if key in shown:
-            out.append(dataclasses.replace(shown[key], deadlines=upcoming))
-            continue
         kind = EntityKind.MATTER if key in state.matters else EntityKind.DOCUMENT
         feed_id = _owning_feed(by_entity.get(key, ()), authoritative_feeds)
+        # The complete current view is classified from the record alone, never from
+        # this week's event, so identical reruns produce an identical CSV.
         category, reasons = classify(
             record.title,
             _classify_text(record, texts.get(key)),
@@ -405,6 +415,15 @@ def _open_deadlines(
             record.site_id,
             taxonomy=tax,
         )
+        if category not in (Category.ACTION_REQUIRED, Category.ROUTINE):
+            category, reasons = Category.ACTION_REQUIRED, (*reasons, "deadline:found")
+        if key in shown:
+            out.append(
+                dataclasses.replace(
+                    shown[key], deadlines=upcoming, category=category, reasons=reasons
+                )
+            )
+            continue
         document = record if isinstance(record, Document) else None
         out.append(
             DigestItem(
@@ -417,7 +436,7 @@ def _open_deadlines(
                 feed_id=feed_id,
                 entity_key=key,
                 title=record.title,
-                url=record.canonical_url,
+                url=_display_url(record, texts.get(key)),
                 published_date=document.published_date if document else None,
                 published_raw=document.published_raw if document else None,
                 first_seen_at=record.first_seen_at,

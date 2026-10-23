@@ -84,6 +84,7 @@ def enrich(
     extractor: Extractor | None = None,
     resolvers: Mapping[str, Resolver] | None = None,
     live_feed_ids: frozenset[str] | None = None,
+    revalidate: int = 0,
 ) -> EnrichmentResult:
     """Acquire or revalidate selected documents; return new state, events, and texts.
 
@@ -106,12 +107,19 @@ def enrich(
     feed that completes its baseline in this very run from announcing
     replacements of records that were never announced. With ``None`` (the
     default) the owning feed's baseline status in ``state`` decides.
+
+    ``revalidate`` adds up to that many already-versioned active documents not
+    otherwise selected, least recently verified first (then key), so files
+    replaced under an unchanged listing are rechecked on a rotating schedule
+    (D-008). It is applied after the ``max_documents`` cut.
     """
 
     if select not in (SELECT_CHANGED, SELECT_ALL):
         raise ValueError(f"select must be {SELECT_CHANGED!r} or {SELECT_ALL!r}, not {select!r}")
     if max_documents is not None and max_documents < 0:
         raise ValueError("max_documents must be None or >= 0")
+    if revalidate < 0:
+        raise ValueError("revalidate must be >= 0")
     job = _Job(
         state,
         contracts,
@@ -127,6 +135,11 @@ def enrich(
         deferred = len(selected) - max_documents
         selected = selected[:max_documents]
         job.diagnostics.append(f"deferred {deferred} document(s) beyond max_documents")
+    if revalidate:
+        rotation = revalidation_order(state, exclude=set(selected))[:revalidate]
+        selected = [*selected, *rotation]
+        if rotation:
+            job.diagnostics.append(f"revalidating {len(rotation)} document(s) by rotation")
     for key in selected:
         try:
             job.process(key)
@@ -239,6 +252,19 @@ def select_documents(state: CatalogState, events: Sequence[Event], select: str) 
     unversioned = [key for key in active if not state.versions.get(key)]
     rest = [key for key in active if state.versions.get(key)] if select == SELECT_ALL else []
     return touched + unversioned + rest
+
+
+def revalidation_order(state: CatalogState, *, exclude: set[str]) -> list[str]:
+    """Versioned active documents, least recently verified first, then by key."""
+
+    candidates = [
+        (state.versions[key][-1].observed_at, key)
+        for key in state.documents
+        if key not in exclude
+        and state.documents[key].status is RecordStatus.ACTIVE
+        and state.versions.get(key)
+    ]
+    return [key for _, key in sorted(candidates)]
 
 
 def owning_feed(

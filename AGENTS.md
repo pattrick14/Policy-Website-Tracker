@@ -16,9 +16,12 @@ handoff record.
 
 ## Current phase
 
-The scaffold is complete. Tracker implementation has not started. The next
-authorized task is Step 1: complete and validate the website/source inventory.
-Do not begin adapters or the state engine until that research gate is complete.
+Steps 1–7 are implemented and Step 8's offline acceptance is complete. The next
+work is deployment and live acceptance (`docs/IMPLEMENTATION_STATUS.md`, "Exact
+next task"). Changes to frozen contracts (`core/models.py`, `core/observations.py`,
+`core/contracts.py`, `adapters/base.py`, `documents/types.py`,
+`reporting/types.py`) need a decision entry and, for serialized records, a
+migration.
 
 ## Non-negotiable product rules
 
