@@ -12,7 +12,7 @@ import re
 import shutil
 import tempfile
 from collections.abc import Iterator, Mapping, Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from policy_tracker.core import serialize
@@ -28,6 +28,9 @@ from policy_tracker.core.models import (
 LAYOUT_VERSION = 1
 CATALOG_PARTS = ("matters", "documents", "appearances", "versions", "feeds")
 TOP_LEVEL_DIRS = ("catalog", "events", "runs", "health", "outbox", "digests", "candidates")
+ARTIFACT_DIRS = ("digests",)  # immutable per-run renderer output roots
+ROLLING_FILES = ("open_deadlines.csv",)  # current views at the data root, promoted with state
+DEADLINE_INDEX = "deadlines.json"  # catalog/deadlines.json, promoted with the catalog
 RUN_ID_PATTERN = re.compile(r"^(?P<year>\d{4})(?P<month>\d{2})\d{2}T\d{6}Z-[0-9a-f]{8}$")
 
 
@@ -40,11 +43,15 @@ class PromotionConflict(StoreError):
 
 
 def _atomic_write(path: Path, text: str) -> None:
+    _atomic_write_bytes(path, text.encode("utf-8"))
+
+
+def _atomic_write_bytes(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
-            stream.write(text)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(tmp, path)
@@ -332,7 +339,15 @@ class DataStore:
                 f"{candidate.base_state_hash[:12]}; refusing to overwrite newer state"
             )
         new_hash = serialize.state_hash(candidate.state)
+        staged = self.candidate_dir(candidate.run_id)
         self._write_catalog(self.catalog_dir, candidate.state)
+        index = staged / "catalog" / DEADLINE_INDEX
+        if index.is_file():
+            _atomic_write_bytes(self.catalog_dir / DEADLINE_INDEX, index.read_bytes())
+        for name in ROLLING_FILES:
+            rolling = staged / "rolling" / name
+            if rolling.is_file():
+                _atomic_write_bytes(self.root / name, rolling.read_bytes())
         self._write_schema()
         manifest["status"] = "promoted"
         manifest["promoted_state_hash"] = new_hash
@@ -435,3 +450,72 @@ class DataStore:
     def iter_events(self) -> Iterator[Event]:
         for run_id in self.run_ids():
             yield from self.load_events(run_id)
+
+    # -- Step 7: delivery support ------------------------------------------------------
+    def is_promoted(self, run_id: str) -> bool:
+        return self.run_path(run_id).exists() and self.load_run(run_id).get("status") == "promoted"
+
+    def last_promoted_run_at(self) -> str | None:
+        """Digest ``generated_at`` (else ``started_at``) of the newest promoted run, if any."""
+
+        for run_id in reversed(self.run_ids()):
+            manifest = self.load_run(run_id)
+            context = manifest.get("context") or {}
+            if manifest.get("status") == "promoted" and context.get("mode") in ("run", "baseline"):
+                return context.get("generated_at") or context.get("started_at")
+        return None
+
+    def artifact_path(self, relative: str) -> Path:
+        """Resolve a renderer path such as ``digests/2026/10/<run_id>.md`` safely."""
+
+        pure = PurePosixPath(relative)
+        parts = pure.parts
+        if (
+            pure.is_absolute()
+            or len(parts) < 2
+            or any(part in ("", ".", "..") for part in parts)
+            or parts[0] not in ARTIFACT_DIRS
+        ):
+            raise StoreError(f"refusing artifact path {relative!r} (must be under {ARTIFACT_DIRS})")
+        return self.root.joinpath(*parts)
+
+    def write_artifacts(self, files: Sequence[tuple[str, bytes]]) -> None:
+        """Write per-run digest files; an existing file is never changed (digests are immutable)."""
+
+        self._require_initialized()
+        targets = [(self.artifact_path(path), path, content) for path, content in files]
+        for target, path, content in targets:
+            if target.exists() and target.read_bytes() != content:
+                raise StoreError(f"refusing to overwrite immutable artifact {path}")
+        for target, _path, content in targets:
+            _atomic_write_bytes(target, content)
+
+    def stage_rolling(self, run_id: str, files: Sequence[tuple[str, bytes]]) -> None:
+        """Stage current-view files (``open_deadlines.csv``); ``promote`` publishes them."""
+
+        for path, content in files:
+            if path not in ROLLING_FILES:
+                raise StoreError(f"{path!r} is not a known rolling file {ROLLING_FILES}")
+            _atomic_write_bytes(self.candidate_dir(run_id) / "rolling" / path, content)
+
+    def stage_deadline_index(self, run_id: str, document: Mapping[str, Any]) -> None:
+        """Stage ``catalog/deadlines.json``; ``promote`` publishes it with the catalog."""
+
+        _write_json(self.candidate_dir(run_id) / "catalog" / DEADLINE_INDEX, dict(document))
+
+    def load_deadline_index(self) -> dict[str, Any] | None:
+        """The promoted ``catalog/deadlines.json`` document, or ``None`` before the first."""
+
+        path = self.catalog_dir / DEADLINE_INDEX
+        return _read_json(path) if path.exists() else None
+
+    def discard_candidate(self, run_id: str, *, reason: str, at: str) -> None:
+        """Mark a staged, unpromoted run ``not_promoted`` and delete its candidate catalog."""
+
+        manifest = self.load_run(run_id)
+        if manifest.get("status") != "candidate":
+            raise StoreError(f"run {run_id} is {manifest.get('status')!r}, not a staged candidate")
+        manifest["status"] = "not_promoted"
+        manifest["discarded"] = {"reason": reason, "at": at}
+        _write_json(self.run_path(run_id), manifest)
+        shutil.rmtree(self.candidate_dir(run_id), ignore_errors=True)

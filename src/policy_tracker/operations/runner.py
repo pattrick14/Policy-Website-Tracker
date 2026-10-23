@@ -1,9 +1,8 @@
-"""Orchestrate one tracker run: collect feeds, apply the engine, stage, and promote.
+"""Feed evaluation, run ids, run reports, and per-feed rebaselines.
 
-Step 2 has no email. ``baseline`` and ``run`` both record events and promote
-immediately; Step 7 inserts the durable outbox (``_stage_delivery``) between
-``write_candidate`` and ``promote`` for post-baseline runs, and adds the
-retry-pending-delivery-before-crawl check at the start of ``run_feeds``.
+``evaluate_feeds`` applies every tracked feed (live feeds first). The durable
+weekly sequence (retry pending delivery, crawl, digest, push, send, promote)
+lives in ``policy_tracker.operations.pipeline``; ``run_feeds`` delegates to it.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from policy_tracker.adapters.base import AdapterRegistry, Fetcher
 from policy_tracker.core import config as config_module
@@ -31,6 +30,9 @@ from policy_tracker.core.models import (
 from policy_tracker.core.observations import FeedObservation
 from policy_tracker.core.serialize import state_hash
 from policy_tracker.operations.store import DataStore
+
+if TYPE_CHECKING:
+    from policy_tracker.operations.pipeline import Publisher, Services
 
 Mode = Literal["baseline", "run"]
 FetcherFactory = Callable[[FeedContract], Fetcher]
@@ -50,6 +52,12 @@ class RunReport:
     feed_runs: tuple[FeedRun, ...]
     events: tuple[Event, ...]
     messages: tuple[str, ...] = ()
+    delivery: str | None = None  # delivered, pending, suppressed, or None (no email)
+    delivery_id: str | None = None
+    artifacts: tuple[str, ...] = ()  # digest files written (or rendered, in a dry run)
+    dry_run_dir: str | None = None
+    data_commit: str | None = None  # tracker-data head after the run (git mode)
+    exit_override: int | None = None
 
     @property
     def accepted_feeds(self) -> tuple[str, ...]:
@@ -69,6 +77,8 @@ class RunReport:
 
     @property
     def exit_code(self) -> int:
+        if self.exit_override is not None:
+            return self.exit_override
         return EXIT_OK if self.accepted_feeds else EXIT_ALL_FEEDS_FAILED
 
 
@@ -104,15 +114,6 @@ def _collect(
     if observation.feed_id != contract.feed_id or observation.site_id != contract.site_id:
         return None, f"adapter_mismatch: {observation.site_id}/{observation.feed_id}"
     return observation, None
-
-
-def _stage_delivery(store: DataStore, candidate: CandidateState, mode: Mode) -> None:
-    """Step 7 seam: render the digest and push a pending outbox entry before promotion.
-
-    Step 2 sends nothing, so this is a no-op; baseline runs never get an outbox entry.
-    """
-
-    del store, candidate, mode
 
 
 def is_live(state: CatalogState, contract: FeedContract) -> bool:
@@ -180,66 +181,28 @@ def run_feeds(
     dry_run: bool,
     code_revision: str,
     now: Callable[[], str] = utc_now,
+    no_email: bool = False,
+    services: Services | None = None,
 ) -> RunReport:
-    """Run every tracked feed once; promote unless ``dry_run`` or every feed failed."""
+    """Run the durable pipeline once (``pipeline.run_pipeline``).
 
-    if mode not in ("baseline", "run"):
-        raise ValueError(f"unknown mode {mode!r}")
-    config = config_module.load_config(Path(config_path))
-    contracts = config_module.load_contracts(config)
-    chash = config_module.config_hash(Path(config_path))
-    store = DataStore(Path(data_dir))
-    # Step 7: retry any pending outbox delivery here, before crawling.
-    base_state = store.load_state()
-    base_hash = state_hash(base_state)
-    started_at = now()
-    run = RunContext(
-        run_id=make_run_id(started_at, chash),
-        started_at=started_at,
-        config_hash=chash,
-        code_revision=code_revision,
-    )
-    state, events, feed_runs = evaluate_feeds(
-        base_state, contracts, run, registry=registry, fetcher_factory=fetcher_factory, now=now
-    )
-    candidate = CandidateState(
-        run_id=run.run_id,
-        base_state_hash=base_hash,
-        state=state,
-        events=events,
-        feed_runs=feed_runs,
-    )
-    messages: list[str] = []
-    live = sum(1 for event in events if event.discovery is Discovery.LIVE)
-    if mode == "baseline" and live:
-        messages.append(
-            f"baseline mode: {live} live event(s) recorded but not delivered (no email in baseline)"
-        )
-    all_failed = not any(feed_run.accepted for feed_run in feed_runs)
-    if all_failed:
-        messages.append("all feeds failed: catalog not promoted")
-    context = {"mode": mode, "started_at": started_at, "dry_run": dry_run}
+    ``mode="run"`` emails unless ``no_email``; without a configured sender it is
+    blocked (``pipeline.DeliveryBlocked``) before anything is crawled or written.
+    """
 
-    promoted = False
-    if not dry_run:
-        if all_failed:
-            store.write_run(candidate, context=context, status="not_promoted")
-        else:
-            store.write_candidate(candidate, context=context)
-            if mode == "run":
-                _stage_delivery(store, candidate, mode)
-            store.promote(candidate)
-            promoted = True
-    return RunReport(
-        run_id=run.run_id,
+    from policy_tracker.operations import pipeline
+
+    return pipeline.run_pipeline(
+        config_path,
+        data_dir,
+        registry=registry,
+        fetcher_factory=fetcher_factory,
         mode=mode,
         dry_run=dry_run,
-        promoted=promoted,
-        base_state_hash=base_hash,
-        state_hash=state_hash(state),
-        feed_runs=feed_runs,
-        events=events,
-        messages=tuple(messages),
+        code_revision=code_revision,
+        now=now,
+        no_email=no_email,
+        services=services,
     )
 
 
@@ -251,8 +214,12 @@ def rebaseline(
     reason: str,
     code_revision: str,
     now: Callable[[], str] = utc_now,
+    publisher: Publisher | None = None,
 ) -> str:
-    """Reset one feed's baseline through the normal candidate/CAS path; return the run id."""
+    """Reset one feed's baseline through the normal candidate/CAS path; return the run id.
+
+    Refused while a delivery is pending (its candidate would no longer apply).
+    """
 
     if not reason.strip():
         raise ValueError("a rebaseline needs a non-empty reason")
@@ -261,7 +228,17 @@ def rebaseline(
     if feed_id not in contracts:
         raise ValueError(f"unknown or untracked feed {feed_id!r}")
     chash = config_module.config_hash(Path(config_path))
+    from policy_tracker.operations.outbox import Outbox
+    from policy_tracker.operations.pipeline import DeliveryPending
+
+    head = publisher.checkout_data() if publisher is not None else None
     store = DataStore(Path(data_dir))
+    pending = Outbox(store.root).pending_ids()
+    if pending:
+        raise DeliveryPending(
+            f"pending delivery {', '.join(pending)} must be delivered or abandoned before "
+            "a rebaseline"
+        )
     base_state = store.load_state()
     started_at = now()
     run_id = make_run_id(started_at, chash)
@@ -281,8 +258,11 @@ def rebaseline(
         "reason": reason,
         "config_hash": chash,
         "code_revision": code_revision,
+        "base_data_commit": head,
     }
     rebaselines = ({"feed_id": feed_id, "reason": reason, "at": started_at},)
     store.write_candidate(candidate, context=context, rebaselines=rebaselines)
     store.promote(candidate)
+    if publisher is not None and head is not None:
+        publisher.commit_and_push(f"run {run_id}: rebaseline {feed_id}", head)
     return run_id

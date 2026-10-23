@@ -90,7 +90,9 @@ def _candidate(store: DataStore, run_id: str, state: m.CatalogState, **kw) -> m.
 
 def _tree(root: Path) -> dict[str, bytes]:
     return {
-        p.relative_to(root).as_posix(): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()
+        p.relative_to(root).as_posix(): p.read_bytes()
+        for p in sorted(root.rglob("*"))
+        if p.is_file()
     }
 
 
@@ -254,9 +256,7 @@ def test_tampered_catalog_hash_mismatch_is_detected(store: DataStore) -> None:
         store.load_state()
 
 
-def test_old_catalog_is_migrated_on_load(
-    store: DataStore, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_old_catalog_is_migrated_on_load(store: DataStore, monkeypatch: pytest.MonkeyPatch) -> None:
     for part in store_module.CATALOG_PARTS:
         path = store.root / "catalog" / f"{part}.json"
         document = json.loads(path.read_text())

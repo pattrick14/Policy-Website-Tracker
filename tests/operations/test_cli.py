@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from policy_tracker.adapters.base import AdapterRegistry
+from policy_tracker.adapters.base import AdapterRegistry, FetchResponse
 from policy_tracker.core import config as config_module
 from policy_tracker.core.contracts import FeedContract
 from policy_tracker.core.models import BaselineStatus, Discovery, EventType
@@ -19,11 +19,12 @@ from policy_tracker.core.observations import (
     ObservedDocument,
 )
 from policy_tracker.core.serialize import state_hash
-from policy_tracker.operations import cli, runner
+from policy_tracker.operations import cli, pipeline, runner
 from policy_tracker.operations.store import DataStore
 
 REPO = Path(__file__).resolve().parents[2]
 CONFIG = REPO / "config" / "sources.yaml"
+REAL_DEFAULT_SERVICES = cli.default_services
 
 
 class FakeAdapter:
@@ -65,6 +66,11 @@ class FakeAdapter:
         )
 
 
+class OfflineFetcher:
+    def get(self, url: str, *, headers=None) -> FetchResponse:
+        return FetchResponse(url=url, status_code=0, headers={}, body=b"", error="offline")
+
+
 def _provenance(page: str, index: int):
     from policy_tracker.core.models import Provenance
 
@@ -98,6 +104,18 @@ def clock(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GITHUB_SHA", "0123456789abcdef")
 
 
+@pytest.fixture(autouse=True)
+def offline_services(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No enrichment, digest, SMTP or git: these tests cover state handling only."""
+
+    monkeypatch.setattr(cli, "default_services", lambda args, *, deliver: pipeline.Services())
+    # Independent of the adapters registered in production, and never on the network.
+    monkeypatch.setattr(cli, "default_registry", AdapterRegistry)
+    monkeypatch.setattr(cli, "default_fetcher_factory", lambda contract: OfflineFetcher())
+    for name in ("SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY", "SMTP_FROM", "SMTP_TO"):
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def data_dir(tmp_path: Path) -> Path:
     path = tmp_path / "tracker-data"
@@ -110,6 +128,8 @@ def _cli(*args: str) -> int:
 
 
 def _run(data_dir: Path, *extra: str) -> int:
+    if "--dry-run" not in extra:
+        extra = ("--no-email", *extra)
     return _cli("run", "--config", str(CONFIG), "--data-dir", str(data_dir), *extra)
 
 
@@ -271,6 +291,7 @@ def _report(data_dir: Path, registry: AdapterRegistry, mode: str) -> runner.RunR
         dry_run=False,
         code_revision="rev",
         now=runner.utc_now,
+        no_email=True,
     )
 
 
@@ -320,3 +341,15 @@ def test_feed_order_puts_live_feeds_first(contracts: dict[str, FeedContract]) ->
     # A coverage bump makes the feed a backfill feed again.
     bumped = {early.feed_id: early, late.feed_id: replace(late, coverage_revision=99)}
     assert runner.feed_order(live_state, bumped) == [early.feed_id, late.feed_id]
+
+
+def test_run_without_smtp_config_is_blocked_before_crawl(
+    data_dir: Path, adapter: FakeAdapter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli, "default_services", REAL_DEFAULT_SERVICES)
+    assert _baseline(data_dir) == 0
+    calls = adapter.calls
+    before = _tree(data_dir)
+    assert _cli("run", "--config", str(CONFIG), "--data-dir", str(data_dir)) == 2
+    assert adapter.calls == calls
+    assert _tree(data_dir) == before

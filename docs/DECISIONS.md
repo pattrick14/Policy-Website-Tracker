@@ -32,6 +32,7 @@ plan where applicable.
 | D-024 | Production fetching uses one policy-enforcing HttpFetcher per site (allowlist, public-IP and per-hop redirect checks, streamed size cap, rate limit, D-020 fallback and breaker); adapters detect block pages by content. | Accepted |
 | D-025 | Adapter identity rules: CERC documents are keyed by canonical URL with row-level matter ids; Coal linkless rows use a content hash; MoP documents are attachment ids resolved to files at enrichment; an undated sighting never clears a known date. | Accepted |
 | D-026 | Deadlines read numeric dates as DD/MM, flag ambiguous dates without a date, let a stated extension replace earlier dates, and report a change only for records and feeds that existed before the run; classification is rule-based from config/taxonomy.yaml. | Accepted |
+| D-027 | Delivery uses a per-run outbox bundle, Message-ID `<run_id.digest.policy-tracker@domain>`, compare-and-swap pushes to `tracker-data`, a pending delivery that blocks new crawls until sent or explicitly abandoned, and a workflow `mode` input for the silent baseline. | Accepted |
 
 ### D-013 — Exclude Ministry of Power press releases and Parliament questions
 
@@ -273,6 +274,27 @@ plan where applicable.
 - Compatibility or migration impact: None. The rules are first-pass
   heuristics, not yet tuned against live listings, and change only by editing
   the taxonomy file.
+- Supersedes: None.
+
+### D-027 — Outbox, Message-ID, abandonment, and workflow modes
+
+- Date: 2026-10-23
+- Status: Accepted (Step 7 engineering decision)
+- Decision: Each post-baseline run writes an immutable bundle at
+  `outbox/<run_id>/` and pushes it before contacting SMTP. The Message-ID is
+  `<run_id.digest.policy-tracker@sender-domain>`, so a retry after an
+  ambiguous send reuses it. Only a hash and count of the recipient set are
+  stored; a send is refused if `SMTP_TO` no longer matches. While a delivery is
+  pending, `run`, `baseline`, and `rebaseline-feed` stop before crawling; an
+  operator may `abandon-delivery <id> --reason`, which is recorded and leaves
+  the candidate unpromoted. Pushes to `tracker-data` are fast-forward only
+  after checking the expected remote head; a mismatch aborts before SMTP. The
+  scheduled workflow takes a `mode` dispatch input (`run` or `baseline`) so
+  the first silent baseline can run from Actions.
+- Rationale: D-010 and D-011: at-least-once delivery without losing or
+  silently skipping a digest, and no history overwrite under concurrency.
+- Compatibility or migration impact: None. Workflows and real SMTP were tested
+  only offline (local bare repositories and a fake SMTP server).
 - Supersedes: None.
 
 ## Decision template

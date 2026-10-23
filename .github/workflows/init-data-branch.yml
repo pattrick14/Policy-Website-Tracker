@@ -1,0 +1,34 @@
+# One-time creation of the orphan tracker-data branch. Refuses if it already exists.
+name: Initialize tracker-data
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: policy-tracker-data
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  init:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install .
+
+      - name: Create tracker-data
+        run: >-
+          policy-tracker init-data-branch
+          --data-dir "$RUNNER_TEMP/tracker-data"
+          --repo "$GITHUB_WORKSPACE"
