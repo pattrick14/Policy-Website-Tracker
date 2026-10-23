@@ -872,3 +872,16 @@ def test_ensure_feed_state_creates_and_syncs() -> None:
 def test_mismatched_feed_is_rejected() -> None:
     with pytest.raises(ValueError):
         apply_observation(CatalogState(), obs(1, [doc("a")], feed_id="feed_b"), contract(), ctx(1))
+
+
+def test_undated_sighting_keeps_known_date() -> None:
+    dated = doc("a", published_raw="02/01/2026", published_date="2026-01-02")
+    state = apply_observation(CatalogState(), obs(1, [dated]), contract(), ctx(1)).state
+    moved = doc("a", section="archive")  # archive tables carry no date column
+    outcome = apply_observation(state, obs(2, [moved]), contract(), ctx(2))
+    assert types(outcome) == [EventType.STATUS_CHANGED]
+    document = outcome.state.documents[key("a")]
+    assert (document.published_date, document.published_raw) == ("2026-01-02", "02/01/2026")
+    redated = doc("a", section="archive", published_raw="03/01/2026", published_date="2026-01-03")
+    outcome = apply_observation(outcome.state, obs(3, [redated]), contract(), ctx(3))
+    assert types(outcome) == [EventType.METADATA_CHANGED]

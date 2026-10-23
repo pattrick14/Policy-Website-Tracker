@@ -762,7 +762,7 @@ sites:
         completeness:
           removal_authority: true
           removal_rule: A row is removed only when absent from every current and archive page in two consecutive complete enumerations; a move from current to archive is a status change
-          failure_indicators: [missing Compensation Orders heading, missing attachment table, missing pager Last page link, missing Archive link, unexpected row-count collapse, CAPTCHA Validation request page, block page]
+          failure_indicators: [missing Compensation Orders heading, missing attachment table, missing pager Last page link, missing Archive link, missing archive pager Last page link, unexpected row-count collapse, CAPTCHA Validation request page, block page]
         history: {boundary: current 233 rows across pager pages 0-4 (page 4 holds S.N 201-233) from 06/10/2026 back to 28/10/2016; archive 63 undated rows across pages 0-1 (50 + 13) covering 2014-2015 Ordinance-era orders with 2021 upload folders; pages 1-3 not fetched individually, boundary_verified: true}
         evidence_urls: [https://www.coal.nic.in/nominated-authority/sanction-order-notice, 'https://www.coal.nic.in/nominated-authority/sanction-order-notice?page=4', https://www.coal.nic.in/nominated-authority/archive-sanction-order-notice, 'https://www.coal.nic.in/nominated-authority/archive-sanction-order-notice?page=1', https://www.coal.nic.in/sitemap]
         fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html, tests/fixtures/ministry_of_coal/paged_table_with_archive.html, tests/fixtures/ministry_of_coal/archive_table_paged.html]
@@ -827,7 +827,7 @@ sites:
         completeness:
           removal_authority: true
           removal_rule: A row is removed only when absent from the current table and every archive page in two consecutive complete enumerations; a move from current to archive is a status change
-          failure_indicators: [missing page heading, missing attachment table, missing Archive link, unexpected row-count collapse, CAPTCHA Validation request page, block page]
+          failure_indicators: [missing page heading, missing attachment table, missing Archive link, missing archive pager Last page link, unexpected row-count collapse, CAPTCHA Validation request page, block page]
         history: {boundary: current 48 rows with period labels February 2025 back to August 2020 and no pager; archive 77 rows across pages 0-1 (50 + 27) with period labels December 2022 back to September 2014; period ranges overlap but no href is shared, boundary_verified: true}
         evidence_urls: [https://www.coal.nic.in/public-information/monthly-summary-cabinets, https://www.coal.nic.in/public-information/monthly-summary-cabinets/archive-monthly-summary-cabinets, 'https://www.coal.nic.in/public-information/monthly-summary-cabinets/archive-monthly-summary-cabinets?page=1', https://www.coal.nic.in/sitemap]
         fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html, tests/fixtures/ministry_of_coal/archive_table_paged.html]
@@ -905,7 +905,7 @@ sites:
         completeness:
           removal_authority: true
           removal_rule: A row is removed only when absent from every current and archive page in two consecutive complete enumerations; a move from current to archive is a status change
-          failure_indicators: [missing page heading, missing attachment table, missing pager Last page link, missing Archive link, unexpected row-count collapse, CAPTCHA Validation request page, block page]
+          failure_indicators: [missing page heading, missing attachment table, missing pager Last page link, missing Archive link, missing archive pager Last page link, unexpected row-count collapse, CAPTCHA Validation request page, block page]
         history: {boundary: current 56 rows across pager pages 0-1 (50 + 6) from October 2025 (posted 2025-11-10) back to November 2018 (posted 2018-11-21); archive 66 rows across pages 0-1 (50 + 16) from September 2021 back to April 2015; one archive row (September 2016) has no link; no href is shared; the 2026-10-22 boundary missed both page-1 pages, boundary_verified: true}
         evidence_urls: [https://www.coal.nic.in/public-information/monthly-report-cabinet, 'https://www.coal.nic.in/public-information/monthly-report-cabinet?page=1', https://www.coal.nic.in/public-information/monthly-report-cabinet/archive-monthly-report-cabinet, 'https://www.coal.nic.in/public-information/monthly-report-cabinet/archive-monthly-report-cabinet?page=1', https://www.coal.nic.in/sitemap]
         fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html, tests/fixtures/ministry_of_coal/paged_table_with_archive.html, tests/fixtures/ministry_of_coal/archive_table_paged.html]

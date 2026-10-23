@@ -655,19 +655,24 @@ class _Apply:
 
         changes: dict[str, tuple[str | None, str | None]] = {}
         owner = self._is_owner(EntityKind.DOCUMENT, key)
+        # A sighting with no date at all (e.g. an archive table without a date
+        # column) never clears a known date; only a different date changes it.
+        undated = not observed.published_date and not normalize_space(observed.published_raw)
+        published_date = doc.published_date if undated else observed.published_date
+        published_raw = doc.published_raw if undated else observed.published_raw
         if owner:
             _diff(changes, "title", doc.title, title)
             _diff(changes, "canonical_url", doc.canonical_url, sighting.canonical)
-            _diff(changes, "published_date", doc.published_date, observed.published_date)
-            _diff(changes, "published_raw", doc.published_raw, observed.published_raw)
+            _diff(changes, "published_date", doc.published_date, published_date)
+            _diff(changes, "published_raw", doc.published_raw, published_raw)
             _diff_metadata(changes, doc.metadata, metadata)
             if changes:
                 doc = replace(
                     doc,
                     title=title,
                     canonical_url=sighting.canonical,
-                    published_date=observed.published_date,
-                    published_raw=observed.published_raw,
+                    published_date=published_date,
+                    published_raw=published_raw,
                     metadata=metadata,
                 )
         # matter_key: any feed may supply it once; only the owner may change it;

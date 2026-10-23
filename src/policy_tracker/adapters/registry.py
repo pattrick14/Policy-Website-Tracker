@@ -9,10 +9,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from policy_tracker.adapters import ministry_of_power
+from policy_tracker.adapters import cerc, ministry_of_coal, ministry_of_power
 from policy_tracker.adapters.base import Adapter, AdapterRegistry
 
-DEFAULT_ADAPTER_FACTORIES: tuple[Callable[[], Adapter], ...] = (ministry_of_power.make_adapter,)
+DEFAULT_ADAPTER_FACTORIES: tuple[Callable[[], Adapter], ...] = (
+    ministry_of_power.make_adapter,
+    ministry_of_coal.make_adapter,
+    cerc.make_adapter,
+)
 
 
 def default_registry() -> AdapterRegistry:

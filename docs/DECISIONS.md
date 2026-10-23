@@ -30,6 +30,7 @@ plan where applicable.
 | D-022 | Feed configuration is a closed schema; tracked feeds load into typed contracts whose host rules alias only tested host mirrors to the site's canonical host, and Coal collapses duplicated path slashes on those hosts. | Accepted |
 | D-023 | State-engine semantics: one owning feed per record sets its metadata, removal counters ignore replays and stale observations, parser migrations apply silently, and event ids identify semantic changes. Feeds run live-first in feed-id order. | Accepted |
 | D-024 | Production fetching uses one policy-enforcing HttpFetcher per site (allowlist, public-IP and per-hop redirect checks, streamed size cap, rate limit, D-020 fallback and breaker); adapters detect block pages by content. | Accepted |
+| D-025 | Adapter identity rules: CERC documents are keyed by canonical URL with row-level matter ids; Coal linkless rows use a content hash; MoP documents are attachment ids resolved to files at enrichment; an undated sighting never clears a known date. | Accepted |
 
 ### D-013 — Exclude Ministry of Power press releases and Parliament questions
 
@@ -214,6 +215,41 @@ plan where applicable.
   explicit.
 - Compatibility or migration impact: None. Error strings are listed in
   `docs/FETCHING.md` and appear in run-health output.
+- Supersedes: None.
+
+### D-025 — Adapter identity rules and undated sightings
+
+- Date: 2026-10-23
+- Status: Accepted (Steps 3–5 engineering decision)
+- Decision:
+  - **CERC.** Documents are keyed by canonical URL, so one file listed on
+    several feeds (home bulletin and a draft row, recent orders and an annual
+    archive) is one document. Row identifiers are matter native ids:
+    `draft_reg:N`, `current_reg:N`, `disc_paper:N`, `spn:<petition>`, and
+    `public_hearing:<hash of year and matter text>`. Serials, petition numbers,
+    archive years, and leaf pages are metadata. When one file appears under
+    two matters, the first parent seen wins.
+  - **Ministry of Coal.** Documents are keyed by the attachment href in
+    canonical form. A row with no link at all uses `linkless:` plus a hash of
+    feed, section, title, raw date, and occurrence order, so a shifting row
+    position does not create a weekly new document. Linked rows never use it.
+  - **Ministry of Power.** Documents are keyed by WordPress attachment id. The
+    document URL is the attachment-record API, which enrichment resolves to the
+    file (English first, then bilingual, then Hindi). When separate English
+    and Hindi files exist, only the English file is hashed, so a change to the
+    Hindi file alone is not detected (D-005, D-008).
+  - **Engine.** A sighting with no date at all (such as a Coal archive table
+    without a date column) never clears a document's known date; a different
+    date still emits `metadata_changed`.
+- Rationale: keying CERC documents by serial plus href would raise duplicate
+  new-document alerts across feeds. Without the linkless rule, the Coal "test"
+  row would alert weekly. Without the date rule, every current-to-archive move
+  would also report a lost date.
+- Compatibility or migration impact: None; no state exists yet. Known risks:
+  if CERC renumbers serials, its matters get new keys, and editing a public
+  hearing's text gives it a new key. Live page shapes could not be rechecked
+  from this environment (proxy refusal), so adapters rest on the Step 1
+  fixtures.
 - Supersedes: None.
 
 ## Decision template
