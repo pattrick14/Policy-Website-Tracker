@@ -61,6 +61,25 @@ after an SMTP success followed by a crash before the success marker is pushed.
 Enable GitHub workflow-failure notifications. Operational health must also be
 persisted in the data branch because email cannot report its own outage reliably.
 
+## Per-site fetching behavior
+
+- **Ministry of Coal (D-017):** at most 0.25 requests/second with backoff.
+  Faster traffic gets an HTTP 200 CAPTCHA page
+  (`tests/fixtures/ministry_of_coal/captcha_block.html`). Detect it by content
+  and treat it as a feed failure, never as an empty list. Pages also carry an
+  anti-bot `<script src="/bnith__…">` whose token changes on every request;
+  exclude it from page fingerprints. A full Coal enumeration costs about 85–90
+  requests, roughly 6 minutes at that rate.
+- **CERC (D-020):** 120 s timeout, apex-to-`www` host fallback on
+  connection-level failures, at most six attempts per URL with 20 s and 40 s
+  backoff, and a circuit breaker after three consecutive failed URLs. Both
+  hosts share one rate budget of 1 request/second.
+- **Ministry of Power:** a browser-style 403 block page can arrive with HTTP 200
+  and must be detected by content.
+- **Network policy:** the GitHub Actions runner must be able to reach all three
+  sites. Cloud research sessions may need the hosts added to their allowed
+  domains; on 2026-10-23 one session's proxy refused `www.coal.nic.in`.
+
 ## Retention
 
 Retain state, events, digests, and run-health records indefinitely. Do not commit

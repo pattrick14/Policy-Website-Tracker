@@ -7,7 +7,7 @@ Last updated: 2026-10-23
 - Planning: complete.
 - Repository documentation scaffold: complete.
 - Runtime implementation: not started (correctly blocked until Step 1 completes).
-- Source inventory: Ministry of Power and CERC `research_status: complete`; Ministry of Coal preliminary pending its CAPTCHA-blocked re-verification (see the 2026-10-23 handoff at the end).
+- Source inventory: all three sites `research_status: complete`; the strict gate passes. Awaiting user review before Step 2.
 - Tests and fixtures: Step 1 validator/probe tests and sanitized representative fixtures, all listed in `tests/fixtures/README.md`.
 - Git repository: initialized locally on `main`; `origin` set to `pattrick14/policy-website-tracker` (not yet pushed or verified).
 
@@ -15,8 +15,8 @@ Last updated: 2026-10-23
 
 | Step | Status | Notes |
 |---|---|---|
-| 1. Website research and repository bootstrap | In progress | MoP and CERC complete; only the Coal re-verification remains. See the final handoff section. |
-| 2. Core contracts and state engine | Blocked by Step 1 | Do not start until inventory review gate passes. |
+| 1. Website research and repository bootstrap | Complete, pending user review | All three sites complete; strict gate passes. See the final handoff section. |
+| 2. Core contracts and state engine | Blocked on inventory review | Start once the user has reviewed the Step 1 inventory. |
 | 3. Ministry of Power adapter | Not started | Depends on Step 2. |
 | 4. Ministry of Coal adapter | Not started | Depends on Step 2. |
 | 5. CERC adapter | Not started | Depends on Step 2. |
@@ -26,9 +26,10 @@ Last updated: 2026-10-23
 
 ## Exact next task
 
-Follow "Authoritative handoff — 2026-10-23 (CERC merged)" at the end of this
-file: finish the Ministry of Coal re-verification, then mark Coal complete and
-pass the strict gate.
+The user reviews the Step 1 inventory (`docs/SOURCE_INVENTORY.md`,
+`config/sources.yaml`, `docs/DECISIONS.md`). After approval, tick the last
+checklist item in `docs/SOURCE_INVENTORY.md` and begin Step 2 (core contracts
+and state engine) per `docs/PROJECT_PLAN.md`.
 
 ## Step 1 exit evidence
 
@@ -366,9 +367,9 @@ Superseded by the 2026-10-23 handoff below; kept for history.
 Step 2 remains blocked until the strict gate passes and the inventory is
 reviewed.
 
-## Authoritative handoff — 2026-10-23 (CERC merged)
+## Handoff — 2026-10-23 (CERC merged, superseded)
 
-This section supersedes every earlier handoff and "exact next action" above.
+Superseded by the Step 1 completion handoff below; kept for history.
 
 ### Completed
 
@@ -430,3 +431,28 @@ Step 2 stays blocked until Coal is complete and the inventory is reviewed.
   trigger. The empty-reply trigger was observed only on 2026-10-22.
 - `tests/fixtures/cerc/non_feed_pages.html` still holds escalation and
   coal-price excerpts from before D-018. They are harmless and can be trimmed.
+
+## Authoritative handoff — 2026-10-23 (Step 1 complete, awaiting review)
+
+This section supersedes every earlier handoff and "exact next action" above.
+
+- D-021 (user-confirmed): the Coal Gasification mission page is `indirect`.
+  The `coal_gasification` feed was removed; What's New captures its
+  announcements, and files posted only on that page are a recorded limit.
+- The Coal re-verification results (auction/allotment and minutes verified with
+  archives and the HTTPS single-slash rewrite; pagers and archives added for
+  What's New and seven other feeds) were already in config. Their inventory
+  text and fixture README rows are now merged. The seven never-fetched safety
+  and SDC narrative pages are an accepted coverage limit.
+- Ministry of Coal is `research_status: complete`, so all three sites are.
+- `docs/step1_pending/` is merged and deleted.
+- Validation: `python -m pytest` 9 passed; structural validation valid;
+  `--require-complete` valid (exit 0).
+- The completion checklist in `docs/SOURCE_INVENTORY.md` is ticked except
+  "Inventory reviewed before Step 2 begins", which needs the user.
+
+Step 2 must not start until the user has reviewed the inventory. The Step 2
+notes in the two earlier handoffs above (unschematized keys, fault-case tests,
+Coal identity rules for mixed-scheme and doubled-slash coal.gov.in hrefs, and a
+note that full Coal enumeration costs about 90 requests, roughly 6 minutes at
+0.25 req/s) still apply.
