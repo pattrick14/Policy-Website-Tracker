@@ -575,3 +575,69 @@ def test_renderers_are_deterministic(renderer) -> None:  # type: ignore[no-untyp
     first, _ = synthetic_digest()
     second, _ = synthetic_digest()
     assert renderer(first).content == renderer(second).content
+
+
+def _single(
+    title: str,
+    text: str,
+    *,
+    appearances: tuple[Appearance, ...] | None = None,
+    events: tuple[Event, ...] | None = None,
+    authoritative_feeds: frozenset[str] | None = None,
+) -> Digest:
+    feeds = {f: feed_state(f) for f in ("mop_documents", "mop_whats_new")}
+    document = doc("r1", "mop_documents", title)
+    state = CatalogState(
+        documents={"r1": document},
+        appearances={a.key: a for a in (appearances or (appearance("mop_documents", "r1"),))},
+        feeds=feeds,
+    )
+    candidate = CandidateState(
+        run_id=RUN_ID,
+        base_state_hash="base",
+        state=state,
+        events=(event("r1", "mop_documents", EventType.NEW_DOCUMENT),)
+        if events is None
+        else events,
+        feed_runs=tuple(feed_run(f) for f in sorted(feeds)),
+    )
+    digest, _ = build_digest(
+        candidate,
+        CatalogState(feeds=feeds),
+        {"r1": ExtractedText("r1", ExtractionStatus.OK, text=text)},
+        generated_at=GENERATED_AT,
+        previous_run_at=None,
+        authoritative_feeds=authoritative_feeds,
+    )
+    return digest
+
+
+def test_only_open_deadlines_promote_to_action_required() -> None:
+    title = "Annual report on the performance of distribution utilities"
+    future = _single(title, "Comments may be sent by 10.12.2026.")
+    (item,) = future.items
+    assert item.deadlines and "deadline:found" in item.reasons
+    assert item.category is Category.ACTION_REQUIRED
+    past = _single(title, "Comments may be sent by 10.09.2026.")
+    (item,) = past.items
+    assert item.deadlines  # the expired deadline is still recorded
+    assert "deadline:found" not in item.reasons
+    assert item.category is not Category.ACTION_REQUIRED
+
+
+def test_owning_feed_ranks_authoritative_above_rolling() -> None:
+    appearances = (
+        appearance("mop_whats_new", "r1", first_seen=EARLIER),
+        appearance("mop_documents", "r1"),
+    )
+    text = "Comments may be sent by 10.12.2026."
+    legacy = _single("Annual report", text, appearances=appearances, events=())
+    assert [i.feed_id for i in legacy.open_deadlines] == ["mop_whats_new"]
+    ranked = _single(
+        "Annual report",
+        text,
+        appearances=appearances,
+        events=(),
+        authoritative_feeds=frozenset({"mop_documents"}),
+    )
+    assert [i.feed_id for i in ranked.open_deadlines] == ["mop_documents"]

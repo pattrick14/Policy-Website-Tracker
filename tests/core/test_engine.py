@@ -885,3 +885,199 @@ def test_undated_sighting_keeps_known_date() -> None:
     redated = doc("a", section="archive", published_raw="03/01/2026", published_date="2026-01-03")
     outcome = apply_observation(outcome.state, obs(3, [redated]), contract(), ctx(3))
     assert types(outcome) == [EventType.METADATA_CHANGED]
+
+
+# ---------------------------------------------------------------------------
+# Ownership: authoritative feeds outrank rolling feeds
+
+
+ROLLING = contract("feed_r", removal_authority=False)
+AUTHORITATIVE = frozenset({"feed_a"})
+
+
+def draft(**kwargs: object) -> ObservedDocument:
+    return doc("draft", url="/Regulations/draft.pdf", **kwargs)  # type: ignore[arg-type]
+
+
+def draft_key() -> str:
+    return f"{SITE}:document:url:https://example.gov.in/Regulations/draft.pdf"
+
+
+def both_baselined() -> CatalogState:
+    state = baselined(("a", "b"))
+    return apply_observation(
+        state,
+        obs(1, [doc("x")], feed_id="feed_r"),
+        ROLLING,
+        ctx(1),
+        authoritative_feeds=AUTHORITATIVE,
+    ).state
+
+
+def test_authoritative_feed_owns_record_first_seen_on_rolling_feed() -> None:
+    """Review repro: a rolling sighting that precedes the authoritative feed."""
+
+    state = both_baselined()
+    rolling_draft = draft(title="Home bulletin: draft")
+    first = apply_observation(
+        state,
+        obs(2, [doc("x"), rolling_draft], feed_id="feed_r"),
+        ROLLING,
+        ctx(2),
+        authoritative_feeds=AUTHORITATIVE,
+    )
+    assert types(first) == [EventType.NEW_DOCUMENT]
+    assert first.state.documents[draft_key()].published_date is None
+
+    listed = draft(
+        title="Draft CERC Regulations, 2026",
+        published_raw="02/01/2026",
+        published_date="2026-01-02",
+        metadata={"serial": "7"},
+    )
+    second = apply_observation(
+        first.state,
+        obs(3, [doc("a"), doc("b"), listed]),
+        contract(),
+        ctx(3),
+        authoritative_feeds=AUTHORITATIVE,
+    )
+    assert types(second) == [EventType.NEW_APPEARANCE, EventType.METADATA_CHANGED]
+    document = second.state.documents[draft_key()]
+    assert document.title == "Draft CERC Regulations, 2026"
+    assert (document.published_date, document.published_raw) == ("2026-01-02", "02/01/2026")
+    assert document.metadata == {"serial": "7"}
+
+    corrected = draft(
+        title="Draft CERC Regulations (Corrigendum), 2026",
+        published_raw="03/01/2026",
+        published_date="2026-01-03",
+        metadata={"serial": "7"},
+    )
+    third = apply_observation(
+        second.state,
+        obs(4, [doc("a"), doc("b"), corrected]),
+        contract(),
+        ctx(4),
+        authoritative_feeds=AUTHORITATIVE,
+    )
+    assert types(third) == [EventType.METADATA_CHANGED]
+    assert third.events[0].details["changed_fields"] == "published_date,published_raw,title"
+    document = third.state.documents[draft_key()]
+    assert document.title == "Draft CERC Regulations (Corrigendum), 2026"
+    assert document.published_date == "2026-01-03"
+
+    # The rolling feed keeps its own rendering: it never rewrites the record.
+    rolling_again = apply_observation(
+        third.state,
+        obs(5, [doc("x"), rolling_draft], feed_id="feed_r"),
+        ROLLING,
+        ctx(5),
+        authoritative_feeds=AUTHORITATIVE,
+    )
+    assert rolling_again.events == ()
+    assert rolling_again.state.documents[draft_key()].title == document.title
+    authoritative_again = apply_observation(
+        rolling_again.state,
+        obs(6, [doc("a"), doc("b"), corrected]),
+        contract(),
+        ctx(6),
+        authoritative_feeds=AUTHORITATIVE,
+    )
+    assert authoritative_again.events == ()
+
+
+def test_rolling_feed_regains_ownership_when_authoritative_withdraws() -> None:
+    state = both_baselined()
+    kwargs = {"authoritative_feeds": AUTHORITATIVE}
+    state = apply_observation(
+        state, obs(2, [doc("x"), doc("a", title="Bulletin a")], feed_id="feed_r"), ROLLING,
+        ctx(2), **kwargs,
+    ).state  # fmt: skip
+    state = apply_observation(state, obs(3, [doc("b")]), contract(), ctx(3), **kwargs).state
+    state = apply_observation(state, obs(4, [doc("b")]), contract(), ctx(4), **kwargs).state
+    assert not state.appearances[akey("a")].present
+    outcome = apply_observation(
+        state, obs(5, [doc("x"), doc("a", title="Bulletin a")], feed_id="feed_r"), ROLLING,
+        ctx(5), **kwargs,
+    )  # fmt: skip
+    assert types(outcome) == [EventType.METADATA_CHANGED]
+    assert outcome.state.documents[key("a")].title == "Bulletin a"
+
+
+def test_two_authoritative_feeds_do_not_flip_flop() -> None:
+    b = contract("feed_b")
+    both = frozenset({"feed_a", "feed_b"})
+    state = baselined(("a",))
+    state = apply_observation(
+        state, obs(1, [doc("z")], feed_id="feed_b"), b, ctx(1), authoritative_feeds=both
+    ).state
+    other = doc("a", title="Other rendering", metadata={"k": "b"})
+    outcome = apply_observation(
+        state, obs(2, [doc("z"), other], feed_id="feed_b"), b, ctx(2), authoritative_feeds=both
+    )
+    # feed_b fills the absent metadata key but does not rewrite feed_a's title.
+    assert types(outcome) == [EventType.NEW_APPEARANCE, EventType.METADATA_CHANGED]
+    assert outcome.events[1].details["changed_fields"] == "metadata.k"
+    state = outcome.state
+    for n in (3, 4):
+        again_a = apply_observation(
+            state, obs(n, [doc("a")]), contract(), ctx(n), authoritative_feeds=both
+        )
+        again_b = apply_observation(
+            again_a.state,
+            obs(n, [doc("z"), other], feed_id="feed_b"),
+            b,
+            ctx(n),
+            authoritative_feeds=both,
+        )
+        assert again_a.events == () and again_b.events == ()
+        state = again_b.state
+    document = state.documents[key("a")]
+    assert document.title == "Title a" and document.metadata == {"k": "b"}
+
+
+def test_non_owner_fills_missing_date_without_ownership() -> None:
+    # Legacy ranking (no authoritative_feeds): the rolling feed owns "draft",
+    # but the later authoritative sighting may still fill its missing date.
+    state = baselined(("a",))
+    state = apply_observation(state, obs(1, [doc("x")], feed_id="feed_r"), ROLLING, ctx(1)).state
+    state = apply_observation(
+        state, obs(2, [doc("x"), draft(title="Bulletin")], feed_id="feed_r"), ROLLING, ctx(2)
+    ).state
+    dated = draft(title="Listed", published_raw="02/01/2026", published_date="2026-01-02")
+    outcome = apply_observation(state, obs(3, [doc("a"), dated]), contract(), ctx(3))
+    assert types(outcome) == [EventType.NEW_APPEARANCE, EventType.METADATA_CHANGED]
+    document = outcome.state.documents[draft_key()]
+    assert document.title == "Bulletin"
+    assert (document.published_date, document.published_raw) == ("2026-01-02", "02/01/2026")
+    # Once filled, a different date from the non-owner changes nothing.
+    redated = draft(title="Listed", published_raw="05/01/2026", published_date="2026-01-05")
+    again = apply_observation(outcome.state, obs(4, [doc("a"), redated]), contract(), ctx(4))
+    assert again.events == ()
+    assert again.state.documents[draft_key()].published_date == "2026-01-02"
+    # The owner's undated sighting keeps the filled date: no flip-flop.
+    rolling = apply_observation(
+        again.state,
+        obs(5, [doc("x"), draft(title="Bulletin")], feed_id="feed_r"),
+        ROLLING,
+        ctx(5),
+    )
+    assert rolling.events == ()
+
+
+def test_owner_keeps_metadata_keys_it_omits_except_on_parser_migration() -> None:
+    state = apply_observation(
+        CatalogState(), obs(1, [doc("a", metadata={"k": "v", "j": "w"})]), contract(), ctx(1)
+    ).state
+    outcome = apply_observation(state, obs(2, [doc("a", metadata={"k": "v2"})]), contract(), ctx(2))
+    assert outcome.events[0].details["changed_fields"] == "metadata.k"
+    assert outcome.state.documents[key("a")].metadata == {"j": "w", "k": "v2"}
+    migrated = apply_observation(
+        outcome.state,
+        obs(3, [doc("a", metadata={"k": "v2"})], parser_version=2),
+        contract(parser_version=2),
+        ctx(3),
+    )
+    assert migrated.events == ()
+    assert migrated.state.documents[key("a")].metadata == {"k": "v2"}

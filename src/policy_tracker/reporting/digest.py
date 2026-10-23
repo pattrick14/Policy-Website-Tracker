@@ -13,6 +13,7 @@ import dataclasses
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 
+from policy_tracker.core.engine import owning_appearance
 from policy_tracker.core.identity import stable_hash
 from policy_tracker.core.models import (
     Appearance,
@@ -185,8 +186,15 @@ def build_digest(
     previous_run_at: str | None,
     previous_deadlines: Mapping[str, tuple[Deadline, ...]] | None = None,
     taxonomy: Taxonomy | None = None,
+    authoritative_feeds: frozenset[str] | None = None,
 ) -> tuple[Digest, Mapping[str, tuple[Deadline, ...]]]:
-    """Return the digest and the deadline index to persist for the next run."""
+    """Return the digest and the deadline index to persist for the next run.
+
+    ``authoritative_feeds`` (feed ids with ``removal_authority``) makes the
+    owning feed shown for synthesized rows follow the engine's owner rule,
+    which ranks authoritative feeds above rolling ones; pass the same set given
+    to ``engine.apply_observation``. ``None`` uses the legacy rule.
+    """
 
     tax = taxonomy or load_taxonomy()
     state = candidate.state
@@ -236,7 +244,7 @@ def build_digest(
                 event_id=stable_hash("deadline_changed", kind.value, key, signature),
                 event_type=EventType.DEADLINE_CHANGED,
                 run_id=candidate.run_id,
-                feed_id=_owning_feed(by_entity.get(key, ())),
+                feed_id=_owning_feed(by_entity.get(key, ()), authoritative_feeds),
                 entity_kind=kind,
                 entity_key=key,
                 occurred_at=generated_at,
@@ -267,11 +275,14 @@ def build_digest(
                 previous_deadlines=previous_deadlines or {},
                 deadline_changed=key in reportable,
                 other_events=others,
+                now=now,
             )
         )
     items.sort(key=_sort_key)
 
-    open_items = _open_deadlines(state, texts, index, items, by_entity, tax, now)
+    open_items = _open_deadlines(
+        state, texts, index, items, by_entity, tax, now, authoritative_feeds
+    )
     digest = Digest(
         run_id=candidate.run_id,
         generated_at=generated_at,
@@ -290,11 +301,17 @@ def build_digest(
     return dataclasses.replace(digest, health=health, partial=partial), index
 
 
-def _owning_feed(appearances: list[Appearance] | tuple[Appearance, ...]) -> str:
-    present = [a for a in appearances if a.present] or list(appearances)
-    if not present:
-        return ""
-    return min(present, key=lambda a: (a.first_seen_at, a.feed_id)).feed_id
+def _owning_feed(
+    appearances: list[Appearance] | tuple[Appearance, ...],
+    authoritative_feeds: frozenset[str] | None = None,
+) -> str:
+    """Owning feed id per ``engine.owner_rank``; ``""`` when there is no appearance."""
+
+    owner = owning_appearance(
+        appearances,
+        None if authoritative_feeds is None else authoritative_feeds.__contains__,
+    )
+    return owner.feed_id if owner is not None else ""
 
 
 def _item(
@@ -307,6 +324,7 @@ def _item(
     previous_deadlines: Mapping[str, tuple[Deadline, ...]],
     deadline_changed: bool,
     other_events: list[str],
+    now: datetime,
 ) -> DigestItem:
     key = event.entity_key
     record = _record(state, event.entity_kind, key)
@@ -323,7 +341,10 @@ def _item(
     deadlines = index.get(key, ())
     if deadline_changed and category is not Category.ACTION_REQUIRED:
         category, reasons = Category.ACTION_REQUIRED, (*reasons, "deadline:changed")
-    elif deadlines and category not in (Category.ACTION_REQUIRED, Category.ROUTINE):
+    elif any(dl.is_open(d, now) for d in deadlines) and category not in (
+        Category.ACTION_REQUIRED,
+        Category.ROUTINE,
+    ):
         category, reasons = Category.ACTION_REQUIRED, (*reasons, "deadline:found")
     details = dict(event.details)
     if event.discovery is Discovery.BACKFILL:
@@ -363,6 +384,7 @@ def _open_deadlines(
     by_entity: Mapping[str, list[Appearance]],
     tax: Taxonomy,
     now: datetime,
+    authoritative_feeds: frozenset[str] | None = None,
 ) -> tuple[DigestItem, ...]:
     shown = {item.entity_key: item for item in items}
     out: list[DigestItem] = []
@@ -375,7 +397,7 @@ def _open_deadlines(
             out.append(dataclasses.replace(shown[key], deadlines=upcoming))
             continue
         kind = EntityKind.MATTER if key in state.matters else EntityKind.DOCUMENT
-        feed_id = _owning_feed(by_entity.get(key, ()))
+        feed_id = _owning_feed(by_entity.get(key, ()), authoritative_feeds)
         category, reasons = classify(
             record.title,
             _classify_text(record, texts.get(key)),

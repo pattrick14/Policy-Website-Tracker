@@ -11,7 +11,7 @@ Semantics are documented in ``docs/STATE_ENGINE.md``.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 
 from policy_tracker.core.contracts import FeedContract, RunContext
@@ -148,6 +148,34 @@ def document_fingerprint(
     )
 
 
+def owner_rank(
+    appearance: Appearance, is_authoritative: Callable[[str], bool] | None = None
+) -> tuple[bool, bool, str, str]:
+    """Sort key of the owner rule; the smallest key owns the record.
+
+    Order: present appearances first, then (when ``is_authoritative`` is
+    given) appearances on feeds with removal authority before rolling/recent
+    feeds, then earliest ``first_seen_at``, then feed id. With
+    ``is_authoritative=None`` every feed ranks as authoritative (the legacy
+    rule), which is still consistent across feeds but lets a rolling feed that
+    saw a record first keep it.
+    """
+
+    rolling = is_authoritative is not None and not is_authoritative(appearance.feed_id)
+    return (not appearance.present, rolling, appearance.first_seen_at, appearance.feed_id)
+
+
+def owning_appearance(
+    appearances: Iterable[Appearance], is_authoritative: Callable[[str], bool] | None = None
+) -> Appearance | None:
+    """The owning appearance among one record's appearances (``None`` if empty)."""
+
+    candidates = list(appearances)
+    if not candidates:
+        return None
+    return min(candidates, key=lambda a: owner_rank(a, is_authoritative))
+
+
 # ---------------------------------------------------------------------------
 # Main entry point
 
@@ -157,11 +185,25 @@ def apply_observation(
     observation: FeedObservation | None,
     contract: FeedContract,
     run: RunContext,
+    *,
+    authoritative_feeds: frozenset[str] | None = None,
 ) -> FeedOutcome:
     """Fold one feed observation into ``state``.
 
     ``observation=None`` means the adapter could not run: a failed run is
     recorded and only ``consecutive_failures`` changes.
+
+    ``authoritative_feeds`` is the set of feed ids whose contracts have
+    ``removal_authority=True``. Operations should pass it on every call (the
+    same set for every feed of a run) so that the owner rule ranks
+    authoritative feeds above rolling/recent feeds: a home bulletin or What's
+    New sighting that precedes the authoritative listing then does not own the
+    record, and the authoritative feed's title, dates, metadata, and
+    corrections apply. The current contract's own ``removal_authority`` is
+    always used for the current feed. With ``None`` (the default) the
+    authority term is ignored for every feed and the legacy rule applies
+    (present, first seen, feed id); this keeps ownership consistent across
+    feeds, but a rolling feed that saw a record first owns it.
     """
 
     if observation is not None:
@@ -203,7 +245,9 @@ def apply_observation(
             reasons=reasons,
             diagnostics=batch.diagnostics,
         )
-    return _Apply(state, feed, observation, contract, run, batch, latest_seen).run()
+    return _Apply(
+        state, feed, observation, contract, run, batch, latest_seen, authoritative_feeds
+    ).run()
 
 
 # ---------------------------------------------------------------------------
@@ -414,8 +458,10 @@ class _Apply:
         run: RunContext,
         batch: _Batch,
         latest_seen: str | None,
+        authoritative_feeds: frozenset[str] | None = None,
     ) -> None:
         self.base = state
+        self.authoritative_feeds = authoritative_feeds
         self.feed = feed
         self.obs = observation
         self.contract = contract
@@ -561,16 +607,23 @@ class _Apply:
 
         self._touch_appearance(EntityKind.MATTER, key, observed.provenance, None, new=False)
         matter = replace(existing, last_seen_at=max(existing.last_seen_at, self.now))
+        changes: dict[str, tuple[str | None, str | None]] = {}
         if self._is_owner(EntityKind.MATTER, key):
-            changes: dict[str, tuple[str | None, str | None]] = {}
+            merged = self._owner_metadata(matter.metadata, metadata)
             _diff(changes, "title", matter.title, title)
             _diff(changes, "canonical_url", matter.canonical_url, sighting.canonical)
-            _diff_metadata(changes, matter.metadata, metadata)
+            _diff_metadata(changes, matter.metadata, merged)
             if changes:
                 matter = replace(
-                    matter, title=title, canonical_url=sighting.canonical, metadata=metadata
+                    matter, title=title, canonical_url=sighting.canonical, metadata=merged
                 )
-                self._metadata_event(EntityKind.MATTER, key, changes)
+        else:
+            filled = _fill_metadata(matter.metadata, metadata)
+            _diff_metadata(changes, matter.metadata, filled)
+            if changes:
+                matter = replace(matter, metadata=filled)
+        if changes:
+            self._metadata_event(EntityKind.MATTER, key, changes)
         self.matters[key] = replace(matter, status=self._record_status(EntityKind.MATTER, key))
 
     # -- documents --------------------------------------------------------
@@ -661,11 +714,12 @@ class _Apply:
         published_date = doc.published_date if undated else observed.published_date
         published_raw = doc.published_raw if undated else observed.published_raw
         if owner:
+            merged = self._owner_metadata(doc.metadata, metadata)
             _diff(changes, "title", doc.title, title)
             _diff(changes, "canonical_url", doc.canonical_url, sighting.canonical)
             _diff(changes, "published_date", doc.published_date, published_date)
             _diff(changes, "published_raw", doc.published_raw, published_raw)
-            _diff_metadata(changes, doc.metadata, metadata)
+            _diff_metadata(changes, doc.metadata, merged)
             if changes:
                 doc = replace(
                     doc,
@@ -673,8 +727,24 @@ class _Apply:
                     canonical_url=sighting.canonical,
                     published_date=published_date,
                     published_raw=published_raw,
-                    metadata=metadata,
+                    metadata=merged,
                 )
+        else:
+            # A non-owner may fill gaps the owner has not filled: a date when the
+            # record has no date evidence at all, and absent metadata keys. It
+            # never overwrites a value, so feeds cannot flip-flop.
+            stored_undated = not doc.published_date and not normalize_space(doc.published_raw)
+            if stored_undated and not undated:
+                _diff(changes, "published_date", doc.published_date, observed.published_date)
+                _diff(changes, "published_raw", doc.published_raw, observed.published_raw)
+                doc = replace(
+                    doc,
+                    published_date=observed.published_date,
+                    published_raw=observed.published_raw,
+                )
+            filled = _fill_metadata(doc.metadata, metadata)
+            _diff_metadata(changes, doc.metadata, filled)
+            doc = replace(doc, metadata=filled)
         # matter_key: any feed may supply it once; only the owner may change it;
         # it is never cleared by a sighting that lacks parent evidence.
         if (
@@ -803,18 +873,39 @@ class _Apply:
 
     # -- ownership and status ---------------------------------------------
 
+    def _is_authoritative(self, feed_id: str) -> bool:
+        if feed_id == self.feed_id:
+            return self.contract.removal_authority
+        assert self.authoritative_feeds is not None
+        return feed_id in self.authoritative_feeds
+
     def _is_owner(self, kind: EntityKind, key: str) -> bool:
-        """The owning feed is the present appearance seen first (feed id breaks ties).
+        """True when this feed owns the record (see ``owner_rank``).
 
         Only the owner may rewrite listing metadata, so two feeds that render
         the same record differently do not flip-flop METADATA_CHANGED events.
         """
 
-        candidates = [self.appearances[a] for a in self.by_entity.get((kind, key), [])]
-        if not candidates:
-            return True
-        primary = min(candidates, key=lambda a: (not a.present, a.first_seen_at, a.feed_id))
-        return primary.feed_id == self.feed_id
+        primary = owning_appearance(
+            (self.appearances[a] for a in self.by_entity.get((kind, key), [])),
+            None if self.authoritative_feeds is None else self._is_authoritative,
+        )
+        return primary is None or primary.feed_id == self.feed_id
+
+    def _owner_metadata(
+        self, stored: Mapping[str, str], observed: Mapping[str, str]
+    ) -> dict[str, str]:
+        """The owner's sighting sets the keys it carries and keeps keys it omits.
+
+        An omitted key is absence of evidence (like an undated sighting), and
+        it may have been filled by another feed; dropping it would let the two
+        feeds flip-flop. A parser migration replaces the metadata wholesale
+        (silently), so keys a parser no longer emits do not linger.
+        """
+
+        if self.migration:
+            return dict(observed)
+        return dict(sorted({**stored, **observed}.items()))
 
     def _record_status(self, kind: EntityKind, key: str) -> RecordStatus:
         present = any(self.appearances[a].present for a in self.by_entity.get((kind, key), []))
@@ -875,6 +966,16 @@ def _opt(value: str | None) -> str:
 
 def _clean_metadata(metadata: Mapping[str, str]) -> dict[str, str]:
     return {key: normalize_space(value) or "" for key, value in sorted(metadata.items())}
+
+
+def _fill_metadata(stored: Mapping[str, str], observed: Mapping[str, str]) -> dict[str, str]:
+    """Stored metadata plus the observed keys it lacks (non-empty values only)."""
+
+    filled = dict(stored)
+    for name, value in observed.items():
+        if name not in filled and value:
+            filled[name] = value
+    return dict(sorted(filled.items()))
 
 
 def _prefixed(prefix: str, metadata: Mapping[str, str]) -> dict[str, str]:

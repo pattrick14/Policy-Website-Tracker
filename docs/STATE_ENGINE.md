@@ -14,9 +14,14 @@ class FeedOutcome:
     events: tuple[Event, ...]
     feed_run: FeedRun
 
-apply_observation(state, observation | None, contract, run) -> FeedOutcome
+apply_observation(
+    state, observation | None, contract, run,
+    *, authoritative_feeds: frozenset[str] | None = None,
+) -> FeedOutcome
 ensure_feed_state(state, contract) -> CatalogState
 rebaseline_feed(state, feed_id, *, reason) -> CatalogState
+owner_rank(appearance, is_authoritative=None) -> tuple   # owner sort key
+owning_appearance(appearances, is_authoritative=None) -> Appearance | None
 ```
 
 Operations call `apply_observation` once per feed per run and chain the
@@ -31,6 +36,14 @@ by feed id) so that whole-run output is reproducible.
   is silent and is not quarantined as a collapse. Records are kept. `reason`
   must not be empty. `FeedState` has no field for it, so the caller must log
   it, for example in the run's health record.
+- `authoritative_feeds` is the set of feed ids whose contracts have
+  `removal_authority=True`. Operations pass the same set on every call of a
+  run. It lets the owner rule (below) rank authoritative feeds above
+  rolling/recent feeds, which the engine cannot know from the current contract
+  alone. The current contract's own `removal_authority` is always used for the
+  current feed. With `None` the authority term is ignored for every feed (the
+  legacy rule), which stays consistent across feeds but lets a rolling feed
+  that saw a record first own it.
 
 ## Acceptance and quarantine
 
@@ -78,11 +91,35 @@ appearance's provenance is updated to the latest sighting, so its locator
 follows ordering changes without creating events.
 
 When the same record appears on several feeds, the **owning feed** controls
-its listing metadata. The owner is the present appearance seen first, with feed
-id breaking ties. Other feeds may only fill in a missing `matter_key`. This
-stops two feeds that render one record differently from producing
-`METADATA_CHANGED` events every week. If the owner's appearance is withdrawn,
-ownership moves to the next present appearance.
+its listing metadata. The owner is the appearance with the smallest
+`owner_rank`: present appearances first, then appearances on feeds with
+removal authority before rolling/recent feeds (when `authoritative_feeds` is
+given), then the earliest `first_seen_at`, then feed id. So a home bulletin or
+What's New sighting that precedes the authoritative listing does not own the
+record; the authoritative feed's title, dates, metadata, and later corrections
+apply. If the owner's appearance is withdrawn, ownership moves to the next
+present appearance. Enrichment (`documents.enrich.owning_feed`, using each
+contract's `removal_authority`) and the digest (`build_digest(...,
+authoritative_feeds=...)`) use the same rank.
+
+Other feeds never overwrite a value. They may fill gaps:
+
+- a missing `matter_key`;
+- `published_date` and `published_raw`, when the record has no date evidence at
+  all (both empty) and the sighting is dated;
+- metadata keys the record does not have (non-empty values only).
+
+The owner's sighting sets the metadata keys it carries and keeps keys it omits
+(an omitted key is absence of evidence, like an undated sighting), so a key
+filled by another feed is not removed and refilled every week. A parser
+migration replaces the owner's metadata wholesale (silently), so keys a parser
+no longer emits do not linger. These rules stop two feeds that render one
+record differently from producing `METADATA_CHANGED` events every week.
+
+Migration note: once operations start passing `authoritative_feeds`, records
+first seen on a rolling feed move to their authoritative feed. On that feed's
+next live run, any title, date, or metadata difference it already listed is
+applied and reported once as `METADATA_CHANGED`.
 
 ## Run modes per feed
 
@@ -109,8 +146,8 @@ ownership moves to the next present appearance.
 ## Change events (live and backfill modes)
 
 - `METADATA_CHANGED` is emitted for a change, by the owning feed, to the title,
-  `canonical_url`, `published_raw`, `published_date`, or a metadata key, and
-  for a gained or changed `matter_key`. `details` has `changed_fields` (a
+  `canonical_url`, `published_raw`, `published_date`, or a metadata key, for a
+  gap filled by another feed, and for a gained or changed `matter_key`. `details` has `changed_fields` (a
   comma-separated, sorted list) plus `<field>.old` and `<field>.new`. Values
   are compared after whitespace normalization, so whitespace-only edits emit
   nothing. Titles and metadata values are stored with whitespace normalized.

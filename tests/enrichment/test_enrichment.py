@@ -41,6 +41,7 @@ from policy_tracker.documents.enrich import (
     Resolution,
     content_replaced_id,
     enrich,
+    owning_feed,
     select_documents,
     wordpress_attachment,
 )
@@ -794,3 +795,70 @@ def test_wordpress_attachment_resolver_order() -> None:
     assert wordpress_attachment(response(only_hindi)) == Resolution("https://p/h.pdf")
     bad = FetchResponse(url=MOP_RECORD, status_code=200, headers={}, body=b"{not json")
     assert wordpress_attachment(bad) == "invalid_json"
+
+
+def test_content_replaced_needs_feed_live_before_the_run() -> None:
+    # The feed completed its baseline in this run (COMPLETE in the post-run
+    # state) but was not live before it: the replacement stays silent.
+    state = versioned_state()
+    fetcher = FakeFetcher({f"{BASE}a.pdf": [ok(f"{BASE}a.pdf", OTHER_PDF, ETag='"v2"')]})
+    result = enrich(
+        state,
+        touched(),
+        CONTRACTS,
+        lambda _c: fetcher,
+        run=RUN2,
+        extractor=NO_OCR,
+        live_feed_ids=frozenset(),
+    )
+    assert result.events == ()
+    assert len(result.state.versions[doc_key("a.pdf")]) == 2
+    assert result.diagnostics == (
+        f"{doc_key('a.pdf')}: content_replaced_silent:baseline_incomplete",
+    )
+    live = enrich(
+        state,
+        touched(),
+        CONTRACTS,
+        lambda _c: fetcher,
+        run=RUN2,
+        extractor=NO_OCR,
+        live_feed_ids=frozenset({FEED}),
+    )
+    assert [e.event_type for e in live.events] == [EventType.CONTENT_REPLACED]
+    # live_feed_ids overrides the post-run status in both directions.
+    partial = versioned_state(baseline=BaselineStatus.PARTIAL)
+    forced = enrich(
+        partial,
+        touched(),
+        CONTRACTS,
+        lambda _c: fetcher,
+        run=RUN2,
+        extractor=NO_OCR,
+        live_feed_ids=frozenset({FEED}),
+    )
+    assert [e.event_type for e in forced.events] == [EventType.CONTENT_REPLACED]
+
+
+def test_owning_feed_prefers_authoritative_over_rolling() -> None:
+    key = doc_key("a.pdf")
+    rolling = replace(contract("feed_r"), kind=FeedKind.ROLLING, removal_authority=False)
+    contracts = {FEED: contract(), "feed_r": rolling}
+
+    def seen(feed_id: str, first_seen: str, present: bool = True) -> Appearance:
+        return Appearance(
+            key=appearance_key(feed_id, EntityKind.DOCUMENT, key),
+            feed_id=feed_id,
+            entity_kind=EntityKind.DOCUMENT,
+            entity_key=key,
+            first_seen_at=first_seen,
+            last_seen_at=first_seen,
+            present=present,
+            missing_complete_runs=0,
+        )
+
+    early_rolling = seen("feed_r", "2026-01-01T00:00:00Z")
+    assert owning_feed([early_rolling, seen(FEED, "2026-01-08T00:00:00Z")], contracts) == FEED
+    withdrawn = seen(FEED, "2026-01-08T00:00:00Z", present=False)
+    assert owning_feed([early_rolling, withdrawn], contracts) == "feed_r"
+    assert owning_feed([early_rolling], {FEED: contract()}) is None

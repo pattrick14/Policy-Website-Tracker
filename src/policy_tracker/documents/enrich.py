@@ -29,6 +29,7 @@ from urllib.parse import urlsplit
 
 from policy_tracker.adapters.base import Fetcher, FetchResponse
 from policy_tracker.core.contracts import FeedContract, RunContext
+from policy_tracker.core.engine import owning_appearance
 from policy_tracker.core.identity import stable_hash
 from policy_tracker.core.models import (
     Appearance,
@@ -82,6 +83,7 @@ def enrich(
     max_documents: int | None = None,
     extractor: Extractor | None = None,
     resolvers: Mapping[str, Resolver] | None = None,
+    live_feed_ids: frozenset[str] | None = None,
 ) -> EnrichmentResult:
     """Acquire or revalidate selected documents; return new state, events, and texts.
 
@@ -96,6 +98,14 @@ def enrich(
     the fetcher and host allowlist. ``resolvers`` (default ``DEFAULT_RESOLVERS``)
     map a site id to a function that turns a JSON attachment record served at
     the canonical URL into the file URL to fetch.
+
+    ``live_feed_ids`` is the set of feeds whose baseline was already complete
+    *before* this run. When given, ``CONTENT_REPLACED`` is emitted only if the
+    owning feed is in it; otherwise the replacement is recorded silently with a
+    ``content_replaced_silent:baseline_incomplete`` diagnostic. This keeps a
+    feed that completes its baseline in this very run from announcing
+    replacements of records that were never announced. With ``None`` (the
+    default) the owning feed's baseline status in ``state`` decides.
     """
 
     if select not in (SELECT_CHANGED, SELECT_ALL):
@@ -110,6 +120,7 @@ def enrich(
         limits,
         extractor or Extractor(),
         DEFAULT_RESOLVERS if resolvers is None else resolvers,
+        live_feed_ids,
     )
     selected = select_documents(state, events, select)
     if max_documents is not None and len(selected) > max_documents:
@@ -235,15 +246,16 @@ def owning_feed(
 ) -> str | None:
     """Feed id of the owning appearance among one document's appearances with a contract.
 
-    Mirrors the engine's owner rule: present first, then earliest first sighting,
-    then feed id.
+    Mirrors the engine's owner rule (``engine.owner_rank``): present first, then
+    feeds with ``removal_authority`` before rolling/recent feeds, then earliest
+    first sighting, then feed id.
     """
 
-    candidates = [appearance for appearance in appearances if appearance.feed_id in contracts]
-    if not candidates:
-        return None
-    owner = min(candidates, key=lambda a: (not a.present, a.first_seen_at, a.feed_id))
-    return owner.feed_id
+    owner = owning_appearance(
+        (appearance for appearance in appearances if appearance.feed_id in contracts),
+        lambda feed_id: contracts[feed_id].removal_authority,
+    )
+    return owner.feed_id if owner is not None else None
 
 
 def content_replaced_id(document_key: str, old_sha256: str, new_sha256: str) -> str:
@@ -278,6 +290,7 @@ class _Job:
     limits: EnrichmentLimits
     extractor: Extractor
     resolvers: Mapping[str, Resolver]
+    live_feed_ids: frozenset[str] | None = None
     versions: dict[str, tuple[DocumentVersion, ...]] = field(init=False)
     events: dict[str, Event] = field(default_factory=dict)
     texts: dict[str, ExtractedText] = field(default_factory=dict)
@@ -441,8 +454,12 @@ class _Job:
         url: str,
     ) -> None:
         old_hash, new_hash = old.byte_sha256 or "", new.byte_sha256 or ""
-        feed_state = self.state.feeds.get(feed_id)
-        if feed_state is None or feed_state.baseline_status is not BaselineStatus.COMPLETE:
+        if self.live_feed_ids is not None:
+            live = feed_id in self.live_feed_ids
+        else:
+            feed_state = self.state.feeds.get(feed_id)
+            live = feed_state is not None and feed_state.baseline_status is BaselineStatus.COMPLETE
+        if not live:
             self.diagnostics.append(f"{key}: content_replaced_silent:baseline_incomplete")
             return
         event_id = content_replaced_id(key, old_hash, new_hash)

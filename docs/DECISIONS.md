@@ -177,10 +177,15 @@ plan where applicable.
 
 - Date: 2026-10-23
 - Status: Accepted (Step 2 engineering decision)
-- Decision: When a record appears on several feeds, only its owning feed (the
-  present appearance seen first, ties broken by feed id) may change its title,
-  dates, canonical URL, or metadata; other feeds may only add a missing
-  `matter_key`. Removal counters advance only when the run id differs from the
+- Decision: When a record appears on several feeds, only its owning feed may
+  change its title, dates, canonical URL, or metadata values. The owner is
+  ranked by present appearance first, then authoritative feeds before rolling
+  ones (the runner passes `authoritative_feeds`), then earliest first sighting,
+  then feed id; enrichment and the digest use the same ranking. A non-owner may
+  only fill gaps: a missing `matter_key`, a date when the record has none, and
+  metadata keys the record lacks. The owner's sighting keeps metadata keys it
+  omits, except during a parser migration. (Revised 2026-10-23 after review: a
+  rolling bulletin seen first had owned records forever.) Removal counters advance only when the run id differs from the
   feed's last complete run and the observation is newer than the feed's latest
   sighting; an older observation is quarantined as `stale_observation`. A
   parser-version change applies metadata and section changes silently for
