@@ -28,6 +28,7 @@ plan where applicable.
 | D-020 | CERC fetching uses a 120 s timeout, apex-to-www host fallback on connection-level failures, bounded retries, a run-level circuit breaker, and canonical-host identity. | Accepted |
 | D-021 | Ministry of Coal "Coal Gasification" mission page receives indirect coverage only; What's New captures its announcements. | Accepted |
 | D-022 | Feed configuration is a closed schema; tracked feeds load into typed contracts whose host rules alias only tested host mirrors to the site's canonical host, and Coal collapses duplicated path slashes on those hosts. | Accepted |
+| D-023 | State-engine semantics: one owning feed per record sets its metadata, removal counters ignore replays and stale observations, parser migrations apply silently, and event ids identify semantic changes. Feeds run live-first in feed-id order. | Accepted |
 
 ### D-013 — Exclude Ministry of Power press releases and Parliament questions
 
@@ -166,6 +167,31 @@ plan where applicable.
   so their mixed-scheme and doubled-slash hrefs keep their raw identity, as
   SOURCE_INVENTORY requires, until a tested rule exists. Adding such a rule
   later changes document keys and needs a migration.
+- Supersedes: None.
+
+### D-023 — State-engine ownership, replay, and ordering rules
+
+- Date: 2026-10-23
+- Status: Accepted (Step 2 engineering decision)
+- Decision: When a record appears on several feeds, only its owning feed (the
+  present appearance seen first, ties broken by feed id) may change its title,
+  dates, canonical URL, or metadata; other feeds may only add a missing
+  `matter_key`. Removal counters advance only when the run id differs from the
+  feed's last complete run and the observation is newer than the feed's latest
+  sighting; an older observation is quarantined as `stale_observation`. A
+  parser-version change applies metadata and section changes silently for
+  that feed until a complete accepted run. Event ids hash the event type,
+  feed, entity, and changed values, not the run id, so archives key history on
+  `(run_id, event_id)`. The runner applies live feeds first, then baselining
+  and backfill feeds, each sorted by feed id, so a new publication is reported
+  as `new_document` even when a baselining feed also sees it.
+- Rationale: Without ownership, two feeds showing different titles for one
+  document would emit `metadata_changed` every week. The replay guard keeps
+  reruns of the same snapshot from withdrawing records (PROJECT_PLAN Step 8).
+  Feed order otherwise changes event types within a run.
+- Compatibility or migration impact: None; no state exists yet. A rebaseline
+  reason has no state field and is recorded in the run manifest instead.
+  See `docs/STATE_ENGINE.md`.
 - Supersedes: None.
 
 ## Decision template
