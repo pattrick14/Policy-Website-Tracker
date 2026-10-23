@@ -27,6 +27,7 @@ plan where applicable.
 | D-019 | CERC repealed regulations, homepage annual archives, technical-validation letters, and dormant regulatory-affairs correspondence are excluded as independent feeds. | Accepted |
 | D-020 | CERC fetching uses a 120 s timeout, apex-to-www host fallback on connection-level failures, bounded retries, a run-level circuit breaker, and canonical-host identity. | Accepted |
 | D-021 | Ministry of Coal "Coal Gasification" mission page receives indirect coverage only; What's New captures its announcements. | Accepted |
+| D-022 | Feed configuration is a closed schema; tracked feeds load into typed contracts whose host rules alias only tested host mirrors to the site's canonical host, and Coal collapses duplicated path slashes on those hosts. | Accepted |
 
 ### D-013 — Exclude Ministry of Power press releases and Parliament questions
 
@@ -139,6 +140,33 @@ plan where applicable.
 - Supersedes: None. Consistent with D-015 and D-016, which leave other
   Ministry of Coal pages without independent feeds when What's New or another
   tracked feed carries their material.
+
+### D-022 — Closed contract schema and site host rules
+
+- Date: 2026-10-23
+- Status: Accepted (Step 2 engineering decision)
+- Decision: `policy_tracker.inventory` rejects unknown top-level, `defaults`,
+  site, feed, `completeness`, `archive_href_rewrite`, and coverage-decision
+  keys, and types every key formerly accepted without a schema (Step 1 notes).
+  `policy_tracker.core.config.load_contracts` validates first, then builds one
+  `FeedContract` per `decision: track` feed. Site fetch keys override
+  `defaults`. `HostRules.host_aliases` maps only tested mirrors to the site's canonical
+  host (`canonical_host` if set, else the `base_url` host): the www/apex pair
+  and any D-020 fallback host. HTTPS upgrade and slash collapsing apply only
+  to aliased hosts.
+  `collapse_duplicate_slashes` is an explicit site key, set only on
+  `ministry_of_coal`, citing the tested 2026-10-23 archive-href rewrite.
+  Rolling feeds must declare `removal_authority: false`.
+  `coverage_revision` and `parser_version` default to 1 when absent.
+- Rationale: A typo in a contract key would otherwise be ignored silently and
+  change collection or removal behavior. One canonical host per site keeps
+  identity stable across host fallback (D-020) and mixed-scheme hrefs.
+- Compatibility or migration impact: None; no state exists yet. Coal's
+  `coal.gov.in` and `www.coal.gov.in` file hosts are allowed but not aliased,
+  so their mixed-scheme and doubled-slash hrefs keep their raw identity, as
+  SOURCE_INVENTORY requires, until a tested rule exists. Adding such a rule
+  later changes document keys and needs a migration.
+- Supersedes: None.
 
 ## Decision template
 

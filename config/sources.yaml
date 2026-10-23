@@ -446,6 +446,11 @@ sites:
       - coal_operationalisation_reviews
     # D-017: coal.nic.in serves an HTTP 200 CAPTCHA page above roughly 0.8 req/s.
     request_rate_per_host_per_second: 0.25
+    # Identity rule: collapse duplicated path slashes in canonical URLs. Tested on
+    # 2026-10-23: archive footer hrefs emitted as http://www.coal.nic.in//<path>
+    # resolve (HTTP 200) at https://www.coal.nic.in/<path>; see archive_href_rewrite
+    # on coal_auction_allotment and coal_minutes_of_meetings.
+    collapse_duplicate_slashes: true
     coverage_decisions:
       # --- Tracked publication families (existing verified feeds) ---
       - scope: "What's New bulletin (/whats-new and homepage What's New block); feed coal_whats_new"

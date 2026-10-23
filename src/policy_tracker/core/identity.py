@@ -23,9 +23,11 @@ _UNSAFE_PATH_CHARS = re.compile(r"[^A-Za-z0-9\-._~!$&'()*+,;=:@/%]")
 class HostRules:
     """Per-site URL rules derived from the contract configuration.
 
-    ``host_aliases`` maps every alternate host to its canonical host. HTTP is
-    upgraded to HTTPS only for allowed hosts, and duplicated path slashes are
-    collapsed only where a tested site rule says so.
+    ``host_aliases`` maps each tested mirror of a site host (including the
+    canonical host itself) to the canonical host. HTTP is upgraded to HTTPS,
+    and duplicated path slashes are collapsed where the site rule says so, only
+    for aliased hosts. Other allowed hosts (such as a separate file host) keep
+    their scheme and path verbatim until a tested rule covers them.
     """
 
     allowed_hosts: frozenset[str]
@@ -46,8 +48,9 @@ def canonical_url(url: str, *, base_url: str, rules: HostRules) -> str:
     scheme = parts.scheme.lower()
     host = (parts.hostname or "").lower()
     port = parts.port
-    if host in rules.allowed_hosts or host in rules.host_aliases:
-        host = rules.host_aliases.get(host, host)
+    aliased = host in rules.host_aliases
+    if aliased:
+        host = rules.host_aliases[host]
         if scheme == "http":
             scheme = "https"
             if port == 80:
@@ -56,7 +59,7 @@ def canonical_url(url: str, *, base_url: str, rules: HostRules) -> str:
         port = None
     netloc = host if port is None else f"{host}:{port}"
     path = parts.path or "/"
-    if rules.collapse_duplicate_slashes:
+    if aliased and rules.collapse_duplicate_slashes:
         path = re.sub(r"/{2,}", "/", path)
     path = _UNSAFE_PATH_CHARS.sub(lambda match: quote(match.group(0)), path)
     return urlunsplit((scheme, netloc, path, parts.query, ""))
