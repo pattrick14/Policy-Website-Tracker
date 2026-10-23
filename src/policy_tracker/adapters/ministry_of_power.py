@@ -321,7 +321,9 @@ def _emit_post(
     position = 0
     for group_index, group in enumerate(groups):
         doc_title = group["title"] or title
-        group_meta = {"group_index": str(group_index)}
+        # Group position lives only in the provenance locator: positional metadata
+        # would emit METADATA_CHANGED for every attachment when groups are reordered.
+        group_meta: dict[str, str] = {}
         if group["title"]:
             group_meta["group_title"] = group["title"]
         if group["type"]:

@@ -2,7 +2,9 @@
 
 ``HttpFetcher`` implements the frozen ``Fetcher`` protocol over ``httpx`` and
 applies one site's ``FetchPolicy``: host allowlist, manual redirects with
-per-hop host and public-address checks, a streamed size cap, a per-host (or
+per-hop host, port, scheme-downgrade, and public-address checks, a streamed
+size cap on decoded bytes with bounded decompression, a per-exchange
+wall-clock deadline, a per-host (or
 per-site) rate limit, D-020 connection-failure classes, host fallback with
 spaced retry rounds, and a run-level circuit breaker. It never raises for
 network failures; it returns ``FetchResponse(error=...)`` instead.
@@ -17,6 +19,7 @@ import socket
 import ssl
 import time
 import urllib.request
+import zlib
 from collections.abc import Callable, Iterable, Mapping
 from typing import Self
 from urllib.parse import urljoin, urlsplit, urlunsplit
@@ -27,6 +30,14 @@ from policy_tracker.adapters.base import FetchResponse
 from policy_tracker.core.contracts import FeedContract, FetchPolicy
 
 DEFAULT_USER_AGENT = "policy-website-tracker/0 (weekly policy publication tracker; httpx)"
+
+# Whole-exchange wall-clock bound, as a multiple of ``request_timeout_seconds``.
+# Per-phase timeouts reset on every received chunk, so without it a slow-drip
+# server could hold one request open indefinitely.
+TOTAL_TIMEOUT_FACTOR = 3.0
+# Responses are requested uncompressed; a caller may override Accept-Encoding.
+DEFAULT_ACCEPT_ENCODING = "identity"
+_DEFAULT_PORTS = {"http": 80, "https": 443}
 
 # Connection-level failure classes. The first five are the D-020 vocabulary used
 # by ``FetchPolicy.host_fallback_on``; the rest are finer splits that never
@@ -51,13 +62,17 @@ NETWORK_ERRORS = D020_FAILURE_CLASSES | {
     "incomplete_body",
     "proxy_error",
     "transport_error",
+    "total_timeout",
 }
 # Refusals decided locally by policy; they never count toward the circuit breaker.
 POLICY_ERRORS = frozenset(
     {
         "invalid_url",
         "host_not_allowed",
+        "port_not_allowed",
         "private_address",
+        "insecure_redirect",
+        "unsupported_encoding",
         "too_many_redirects",
         "too_large",
         "circuit_open",
@@ -250,6 +265,7 @@ class HttpFetcher:
         self.policy = policy
         self.allowed_hosts = frozenset(host.lower() for host in allowed_hosts)
         self._sleep = sleep
+        self._clock = clock
         self._resolver = resolver or system_resolver
         # A local resolution failure is tolerated only when an environment proxy
         # performs the connection (the proxy then resolves the name).
@@ -266,7 +282,7 @@ class HttpFetcher:
             follow_redirects=False,
             verify=True,
             trust_env=True,
-            headers={"User-Agent": user_agent},
+            headers={"User-Agent": user_agent, "Accept-Encoding": DEFAULT_ACCEPT_ENCODING},
         )
         self._consecutive_failed_urls = 0
         self._circuit_open = False
@@ -306,6 +322,8 @@ class HttpFetcher:
             return _failure(url, "invalid_url", None)
         if host not in self.allowed_hosts:
             return _failure(url, "host_not_allowed", host)
+        if not _default_port(parts.scheme, parts.port):
+            return _failure(url, "port_not_allowed", host)
 
         hosts = self._host_order(host)
         max_attempts = max(1, self.policy.max_attempts_per_url)
@@ -368,6 +386,8 @@ class HttpFetcher:
             raise _Refused("invalid_url", url, host or None)
         if host not in self.allowed_hosts:
             raise _Refused("host_not_allowed", url, host)
+        if not _default_port(parts.scheme, parts.port):
+            raise _Refused("port_not_allowed", url, host)
         try:
             addresses = list(self._resolver(host))
         except OSError:
@@ -380,16 +400,19 @@ class HttpFetcher:
 
     def _fetch_once(self, url: str, headers: Mapping[str, str] | None) -> FetchResponse:
         current = url
+        previous = url
         host: str | None = None
         try:
-            for _ in range(self.policy.max_redirects + 1):
+            for hop in range(self.policy.max_redirects + 1):
+                if hop and _downgrades(previous, current):
+                    raise _Refused("insecure_redirect", current, host)
                 host = self._check_host(current)
                 self._limiter.wait(host)
                 self.attempts += 1
                 result = self._send(current, host, headers)
                 if isinstance(result, FetchResponse):
                     return result
-                current = result  # redirect target
+                previous, current = current, result  # redirect target
             return _failure(current, "too_many_redirects", host)
         except _Refused as refused:
             return _failure(refused.url, refused.error, refused.host)
@@ -398,17 +421,21 @@ class HttpFetcher:
         """One HTTP exchange. Returns a response, or the next URL for a redirect."""
 
         started = False
+        deadline = self._clock() + TOTAL_TIMEOUT_FACTOR * self.policy.request_timeout_seconds
         try:
             request = self._client.build_request("GET", url, headers=dict(headers or {}))
             response = self._client.send(request, stream=True)
             started = True
+            if self._clock() > deadline:
+                response.close()
+                return _failure(url, "total_timeout", host)
             try:
                 location = response.headers.get("location")
                 if response.status_code in _REDIRECT_STATUSES and location:
                     return urljoin(url, location.strip())
-                body = self._read_capped(response)
-                if body is None:
-                    return _failure(url, "too_large", host)
+                body = self._read_capped(response, deadline)
+                if isinstance(body, str):
+                    return _failure(url, body, host)
                 return FetchResponse(
                     url=url,
                     status_code=response.status_code,
@@ -423,19 +450,120 @@ class HttpFetcher:
         except (httpx.HTTPError, httpx.StreamError, OSError) as exc:
             return _failure(url, classify_error(exc, response_started=started), host)
 
-    def _read_capped(self, response: httpx.Response) -> bytes | None:
+    def _read_capped(self, response: httpx.Response, deadline: float) -> bytes | str:
+        """Body decoded under the size cap and deadline, or an error class.
+
+        Raw bytes are read with ``iter_raw`` and decoded here with a bounded
+        incremental decompressor, so the cap applies to decoded bytes and no
+        single chunk can expand past it (a gzip bomb stops at ``cap + 1``).
+        """
+
         cap = self.policy.max_document_bytes
         declared = response.headers.get("content-length")
         if declared and declared.strip().isdigit() and int(declared) > cap:
-            return None
+            return "too_large"
+        if response.is_stream_consumed:
+            # The transport already buffered and decoded the body (httpx.MockTransport
+            # in tests); only the cap can still apply.
+            content = response.content
+            return "too_large" if len(content) > cap else content
+        decoder = _BoundedDecoder.for_encoding(response.headers.get("content-encoding"))
+        if decoder is None:
+            return "unsupported_encoding"
         chunks: list[bytes] = []
         total = 0
-        for chunk in response.iter_bytes():
-            total += len(chunk)
+        raw_total = 0
+        for raw in response.iter_raw():
+            if self._clock() > deadline:
+                return "total_timeout"
+            raw_total += len(raw)
+            if raw_total > cap:  # compressed bytes alone exceed the cap
+                return "too_large"
+            for piece in decoder.feed(raw, cap - total + 1):
+                total += len(piece)
+                if total > cap:
+                    return "too_large"
+                chunks.append(piece)
+        for piece in decoder.flush(cap - total + 1):
+            total += len(piece)
             if total > cap:
-                return None
-            chunks.append(chunk)
+                return "too_large"
+            chunks.append(piece)
         return b"".join(chunks)
+
+
+class _BoundedDecoder:
+    """Incremental Content-Encoding decoder whose output per call is bounded."""
+
+    def __init__(self, encoding: str) -> None:
+        self.encoding = encoding
+        self._zlib: zlib._Decompress | None = None
+        self._buffered = b""  # deflate: wait for enough bytes to pick zlib vs raw
+        if encoding in ("gzip", "x-gzip"):
+            self._zlib = zlib.decompressobj(zlib.MAX_WBITS | 16)
+
+    @classmethod
+    def for_encoding(cls, header: str | None) -> _BoundedDecoder | None:
+        codings = [c.strip().lower() for c in (header or "").split(",") if c.strip()]
+        codings = [c for c in codings if c != "identity"]
+        if not codings:
+            return cls("identity")
+        if len(codings) == 1 and codings[0] in ("gzip", "x-gzip", "deflate"):
+            return cls(codings[0])
+        return None  # brotli, zstd, stacked codings: not requested, not decoded
+
+    def _drain(self, data: bytes, limit: int) -> list[bytes]:
+        assert self._zlib is not None
+        out = [self._zlib.decompress(data, max(limit, 1))]
+        produced = len(out[0])
+        while self._zlib.unconsumed_tail and produced <= limit - 1:
+            piece = self._zlib.decompress(self._zlib.unconsumed_tail, max(limit - produced, 1))
+            if not piece:
+                break
+            out.append(piece)
+            produced += len(piece)
+        return out
+
+    def feed(self, data: bytes, limit: int) -> list[bytes]:
+        """Decode ``data``; return at most about ``limit`` bytes (more means over the cap)."""
+
+        if self.encoding == "identity":
+            return [data]
+        try:
+            if self._zlib is None:  # deflate: zlib-wrapped or raw, decided on first bytes
+                self._buffered += data
+                if len(self._buffered) < 2:
+                    return []
+                header = self._buffered[:2]
+                wrapped = header[0] & 0x0F == 8 and int.from_bytes(header, "big") % 31 == 0
+                self._zlib = zlib.decompressobj(zlib.MAX_WBITS if wrapped else -zlib.MAX_WBITS)
+                data, self._buffered = self._buffered, b""
+            return self._drain(data, limit)
+        except zlib.error as exc:
+            raise httpx.DecodingError(str(exc)) from exc
+
+    def flush(self, limit: int) -> list[bytes]:
+        if self.encoding == "identity":
+            return []
+        out: list[bytes] = []
+        if self._zlib is None and self._buffered:
+            out.extend(self.feed(b"", limit))
+        if self._zlib is not None:
+            try:
+                out.append(self._zlib.flush())
+            except zlib.error as exc:
+                raise httpx.DecodingError(str(exc)) from exc
+        return out
+
+
+def _default_port(scheme: str, port: int | None) -> bool:
+    return port is None or port == _DEFAULT_PORTS.get(scheme)
+
+
+def _downgrades(previous: str, target: str) -> bool:
+    """True for an https -> http redirect hop."""
+
+    return urlsplit(previous).scheme == "https" and urlsplit(target).scheme != "https"
 
 
 class SiteFetcherPool:

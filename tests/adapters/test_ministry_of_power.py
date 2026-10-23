@@ -281,7 +281,8 @@ def test_documents_attachments_link_to_parents(adapter, contracts) -> None:
         docs_url("acts-and-policy", 1), "posts[1].attachments[1]"
     )
     assert by_id["6011"].title == "Policy and amendment"
-    assert by_id["6011"].metadata["group_index"] == "0"
+    assert "group_index" not in by_id["6011"].metadata
+    assert by_id["6011"].metadata["group_title"] == "Policy and amendment"
     external = [doc for doc in observation.documents if doc.native_id is None]
     assert [doc.url for doc in external] == ["https://www.example.org/resolution.pdf"]
     assert external[0].matter_native_id == "7002"
@@ -294,6 +295,26 @@ def test_documents_attachments_link_to_parents(adapter, contracts) -> None:
     assert matter.metadata["post_status"] == "publish"
     annual = [doc.native_id for doc in observation.documents if doc.matter_native_id == "13652"]
     assert annual == ["5103", "5102", "5101"]
+
+
+def test_reordered_file_groups_keep_document_metadata(adapter, contracts) -> None:
+    """Review repro: reordering a post's file groups must not change any metadata."""
+
+    url = docs_url("acts-and-policy", 1)
+    payload = fixture_json("adapter_acts_page1.json")
+    groups = payload["posts"][1]["acf_data"]["file"]
+    payload["posts"][1]["acf_data"]["file"] = list(reversed(groups))
+    original = collect(adapter, contracts["mop_documents"], replay(DOCUMENT_ROUTES))
+    reordered = collect(
+        adapter, contracts["mop_documents"], replay(DOCUMENT_ROUTES, **{url: json_body(payload)})
+    )
+
+    def metadata(observation: FeedObservation) -> dict[str, dict[str, str]]:
+        return {doc.url: dict(doc.metadata) for doc in observation.documents}
+
+    assert metadata(reordered) == metadata(original)
+    moved = {doc.url: doc.provenance.locator for doc in reordered.documents}
+    assert moved["https://www.example.org/resolution.pdf"] == "posts[1].attachments[0]"
 
 
 def test_documents_archive_pass_sections(adapter, contracts) -> None:

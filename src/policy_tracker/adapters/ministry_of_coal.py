@@ -252,6 +252,15 @@ def has_pager(root: Tag) -> bool:
     return bool(root.select("nav.pager, nav[aria-label=Pagination], ul.pager__items, .pager"))
 
 
+def pager_has_items(root: Tag) -> bool:
+    """True when a pager shows any item (an empty pager list is the single-page shape)."""
+
+    for pager in root.select("nav.pager, nav[aria-label=Pagination], ul.pager__items, .pager"):
+        if pager.find("li") is not None or pager.find("a", href=True) is not None:
+            return True
+    return False
+
+
 def last_page_link(root: Tag, base: str) -> int | None:
     """Page number of the pager "Last" link, or None when the page shows none."""
 
@@ -575,9 +584,15 @@ class _Collector:
         root = self.fetch(url)
         self.check_heading(root, url, spec.heading)
         last = last_page_link(root, url)
+        unpaged = last is None
         if last is None:
             if paged:
                 self.incomplete(f"missing pager Last page link at {url}")
+            elif pager_has_items(root):
+                # A populated pager without a readable Last link may hide rows on later
+                # pages; never mark page 0 alone complete (removal-authority feeds). An
+                # empty pager list is the observed single-page shape and stays complete.
+                self.incomplete(f"pager items shown without a Last page link at {url}")
             last = 0
         elif last > MAX_PAGES:
             self.invalid(f"pager Last page {last} exceeds the bound {MAX_PAGES} at {url}")
@@ -586,16 +601,29 @@ class _Collector:
         self.expect(last + 1)
         count = self.table_page(root, url, spec, listing_url=url, section=section)
         self.check_page_rows(count, url, last > 0, before_terminus=0 < last)
+        if unpaged and not paged and count == ROWS_PER_PAGE:
+            # Exactly one full pager page with no pager: rows may continue on ?page=1.
+            self.incomplete(
+                f"{count} rows (a full {ROWS_PER_PAGE}-row page) without a pager at {url}"
+            )
         for number in range(1, last + 1):
             target = page_url(url, number)
             page_root = self.fetch(target)
             terminus = spec.terminus_on_empty_page and has_pager(page_root)
             if terminus and not _top_level_tables(page_root):
-                self.diagnostics.append(
-                    f"{target} shows the pager without tables: pager terminus reached"
+                if number >= last:
+                    # The observed out-of-range shape: the Last link's own page is empty.
+                    self.diagnostics.append(
+                        f"{target} shows the pager without tables: pager terminus reached"
+                    )
+                    self.expect(number - last)
+                    break
+                # An empty render before the Last page is not the end of the
+                # collection; keep reading later pages but never claim completeness.
+                self.incomplete(
+                    f"{target} shows the pager without tables before the Last page {last}"
                 )
-                self.expect(number - last)
-                break
+                continue
             self.check_heading(page_root, target, spec.heading)
             here = last_page_link(page_root, target)
             if here is not None and here != last:

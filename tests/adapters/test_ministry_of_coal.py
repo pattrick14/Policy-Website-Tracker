@@ -391,6 +391,72 @@ def test_auction_out_of_range_page_is_terminus(adapter, contracts) -> None:
     assert len(obs.documents) == 7
 
 
+def test_empty_page_before_last_is_not_terminus(adapter, contracts) -> None:
+    """Review repro: Last=5 and page 2 renders pager-only; pages 3-5 must still be read."""
+
+    url = SITE + "whats-new"
+    page = fixture_bytes("whats_new_paged.html").replace(b"page=40", b"page=5")
+    replay = ReplayFetcher(fixture_root=FIXTURES)
+    replay.add(url, body=page, content_type="text/html")
+    replay.add(url + "?page=1", body=page, content_type="text/html")
+    replay.add(url + "?page=2", fixture="paged_view_out_of_range.html")
+    replay.add(url + "?page=3", body=page, content_type="text/html")
+    replay.add(url + "?page=4", body=page, content_type="text/html")
+    replay.add(url + "?page=5", fixture="whats_new_last_page.html")
+    obs = collect(adapter, contracts, "coal_whats_new", replay)
+    assert obs.evidence.parse_valid and not obs.evidence.enumeration_complete
+    assert any("before the Last page 5" in d for d in obs.evidence.diagnostics)
+    assert not any("pager terminus reached" in d for d in obs.evidence.diagnostics)
+    assert url + "?page=5" in replay.requested_urls and replay.unused() == []
+
+
+def test_auction_empty_page_before_last_is_incomplete(adapter, contracts) -> None:
+    routes = _auction_routes()
+    routes[NA + "auction-allotment?page=3"] = "paged_view_out_of_range.html"
+    obs = collect(adapter, contracts, "coal_auction_allotment", fetcher(routes))
+    assert obs.evidence.parse_valid and not obs.evidence.enumeration_complete
+    assert any("before the Last page 8" in d for d in obs.evidence.diagnostics)
+
+
+def _unpaged_page(rows: int, pager: str = "") -> bytes:
+    body = "".join(
+        f'<tr><td>{n}</td><td>Example SOP {n}</td><td><a href="/sites/default/files/sop-{n}.pdf">'
+        f"Downloads</a></td><td>16 Oct 2026</td></tr>"
+        for n in range(1, rows + 1)
+    )
+    return (
+        "<!doctype html><html><body><main><h1>SOP</h1><table>"
+        "<tr><th>S.N</th><th>Title</th><th>Attachment</th><th>Date</th></tr>"
+        f"{body}</table>{pager}</main></body></html>"
+    ).encode()
+
+
+def test_unpaged_feed_with_populated_pager_but_no_last_is_incomplete(adapter, contracts) -> None:
+    pager = (
+        '<nav aria-label="Pagination" class="pager"><ul class="pager__items">'
+        '<li class="pager__item is-active"><a href="?page=0">1</a></li>'
+        '<li class="pager__item"><a href="?page=1">2</a></li></ul></nav>'
+    )
+    url = SITE + "public-information/sop"
+    replay = ReplayFetcher().add(url, body=_unpaged_page(3, pager), content_type="text/html")
+    obs = collect(adapter, contracts, "coal_sop", replay)
+    assert obs.evidence.parse_valid and not obs.evidence.enumeration_complete
+    assert any("without a Last page link" in d for d in obs.evidence.diagnostics)
+    empty_pager = '<nav class="pager"><ul class="pager__items"></ul></nav>'
+    single = ReplayFetcher().add(url, body=_unpaged_page(3, empty_pager), content_type="text/html")
+    assert_clean(collect(adapter, contracts, "coal_sop", single))  # observed single-page shape
+
+
+def test_unpaged_feed_with_full_page_of_rows_is_incomplete(adapter, contracts) -> None:
+    url = SITE + "public-information/sop"
+    full = ReplayFetcher().add(url, body=_unpaged_page(50), content_type="text/html")
+    obs = collect(adapter, contracts, "coal_sop", full)
+    assert obs.evidence.parse_valid and not obs.evidence.enumeration_complete
+    assert any("full 50-row page" in d for d in obs.evidence.diagnostics)
+    short = ReplayFetcher().add(url, body=_unpaged_page(49), content_type="text/html")
+    assert_clean(collect(adapter, contracts, "coal_sop", short))
+
+
 def test_whats_new_rolling_pager(adapter, contracts) -> None:
     url = SITE + "whats-new"
     routes = {url: "whats_new_paged.html", url + "?page=40": "whats_new_last_page.html"}

@@ -34,7 +34,12 @@ Every `get(url, headers=...)` call:
 1. Returns `circuit_open` at once, with no network traffic, if the site's
    breaker is open.
 2. Accepts only `http`/`https` URLs whose host is in the site's
-   `allowed_hosts` (`invalid_url`, `host_not_allowed`).
+   `allowed_hosts` (`invalid_url`, `host_not_allowed`), on the scheme's
+   default port only (no port, `:443` for https, `:80` for http); any other
+   port is refused before any traffic (`port_not_allowed`). An initial `http`
+   URL to an allowed host is fetched as given (it is not upgraded); configured
+   URLs are https, and an `http` URL found on a page should be canonicalized by
+   the adapter's `HostRules`.
 3. Resolves each hop's host and refuses it unless every address is a public,
    globally routable unicast IP (`private_address`): private, loopback,
    link-local (including 169.254.169.254), CGNAT, reserved, multicast,
@@ -50,11 +55,26 @@ Every `get(url, headers=...)` call:
    `SSL_CERT_FILE`/`SSL_CERT_DIR` when set), the policy timeout for each of
    connect, read, write, and pool, and the caller's headers unchanged.
    Conditional headers (`If-None-Match`, `If-Modified-Since`) pass through.
+   `Accept-Encoding: identity` is sent unless the caller supplies its own
+   `Accept-Encoding`.
 6. Follows redirects (301, 302, 303, 307, 308 with a `Location`) itself, up to
    `max_redirects` hops; each hop repeats steps 2–4. One more redirect returns
-   `too_many_redirects`. A 3xx without `Location` is returned as is.
-7. Streams the body and stops at `max_document_bytes` of decoded content
-   (`too_large`); a larger declared `Content-Length` is refused before reading.
+   `too_many_redirects`. A 3xx without `Location` is returned as is. A hop
+   from `https` to `http` is refused before it is requested
+   (`insecure_redirect`); `http` to `https` is allowed.
+7. Streams the raw body and stops at `max_document_bytes` (`too_large`); a
+   larger declared `Content-Length` is refused before reading. The fetcher
+   decodes `Content-Encoding` itself (`gzip`, `x-gzip`, `deflate`, or none)
+   with a bounded incremental decompressor, so the cap applies to decoded
+   bytes and a compression bomb stops after at most `max_document_bytes + 1`
+   decoded bytes. Any other or stacked encoding (`br`, `zstd`, `gzip, gzip`)
+   is refused (`unsupported_encoding`); it is only possible when a server
+   ignores `identity` or a caller asks for it.
+8. Bounds each HTTP exchange (one hop, from sending the request to the end of
+   the body, after the rate-limit wait) by a wall-clock deadline of
+   `TOTAL_TIMEOUT_FACTOR` (3) × `request_timeout_seconds`. Exceeding it returns
+   `total_timeout`, checked when headers arrive and after every received chunk,
+   so a slow-drip server is cut off within one read timeout of the deadline.
 
 A response with any HTTP status, including 304, 403, 404, and 5xx, is returned
 as a normal `FetchResponse` with `error=None`. `FetchResponse.ok` is true only
@@ -82,10 +102,15 @@ Other network classes (count toward the breaker, never fall back unless a
 site lists them): `write_timeout`, `pool_timeout`, `connection_refused`,
 `dns_error`, `tls_certificate_error`, `connect_error`, `read_error`,
 `protocol_error` (malformed response head), `incomplete_body` (disconnect after
-headers), `proxy_error`, `transport_error`.
+headers), `proxy_error`, `transport_error`, `total_timeout` (the per-exchange
+wall-clock deadline above). `total_timeout` is deliberately its own class, not
+`read_timeout`: a server that answers but drips the body is not a dead host, so
+it does not trigger D-020 host fallback, and it is not an allowed
+`host_fallback_on` value; it does count toward the breaker.
 
 Policy refusals (never retried, never counted toward the breaker):
-`invalid_url`, `host_not_allowed`, `private_address`, `too_many_redirects`,
+`invalid_url`, `host_not_allowed`, `port_not_allowed`, `private_address`,
+`insecure_redirect`, `unsupported_encoding`, `too_many_redirects`,
 `too_large`, `circuit_open`.
 
 ## Host fallback, retries, and the circuit breaker (D-020)
@@ -171,9 +196,11 @@ Replay does not apply the fetch policy; fetch-policy behavior is tested in
 - The private-address check resolves names before connecting; a DNS answer
   that changes between the check and the connection (rebinding) is not
   detected, and through a proxy the proxy's own resolution is trusted.
-- Timeouts apply to each phase and each read, not to a whole transfer, so a
-  slow but steady download can exceed `request_timeout_seconds` in total;
-  the size cap bounds it.
+- Per-phase timeouts apply to each read; the whole exchange is bounded only by
+  the `total_timeout` deadline, which is checked between reads, so it can be
+  overrun by up to one `request_timeout_seconds`.
+- Test transports that buffer the body (`httpx.MockTransport`) bypass the
+  fetcher's own decoder; the size cap still applies to the buffered body.
 - TLS-handshake classification depends on exception text and is best effort.
 - The breaker is per process and per site; a new process starts closed.
 - The fetcher is not thread-safe; feeds of a site run sequentially.

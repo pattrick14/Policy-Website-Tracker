@@ -10,6 +10,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from policy_tracker.adapters import http as http_module
 from policy_tracker.adapters.base import Fetcher
 from policy_tracker.adapters.http import (
     D020_FAILURE_CLASSES,
@@ -651,3 +652,143 @@ def test_malformed_urls_and_redirect_targets_never_raise() -> None:
     assert fetcher.get("https://cercind.gov.in:notaport/").error == "invalid_url"
     assert fetcher.get("https://cercind.gov.in/a").error == "invalid_url"
     assert len(recorder.requests) == 1
+
+
+# -- review hardening: encoding, deadline, downgrade, ports ---------------------------
+
+
+class StreamingTransport(httpx.BaseTransport):
+    """Transport that streams ``chunks`` lazily (MockTransport buffers bodies)."""
+
+    def __init__(self, chunks: Callable[[], Iterator[bytes]], headers: dict[str, str]) -> None:
+        self.chunks = chunks
+        self.headers = headers
+        self.requests: list[httpx.Request] = []
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        outer = self
+
+        class Stream(httpx.SyncByteStream):
+            def __iter__(self) -> Iterator[bytes]:
+                yield from outer.chunks()
+
+        return httpx.Response(200, headers=self.headers, stream=Stream())
+
+
+def streaming(
+    chunks: Callable[[], Iterator[bytes]],
+    headers: dict[str, str],
+    policy: FetchPolicy = CERC_POLICY,
+) -> tuple[HttpFetcher, StreamingTransport, FakeClock]:
+    transport = StreamingTransport(chunks, headers)
+    clock = FakeClock()
+    fetcher = HttpFetcher(
+        policy,
+        CERC_HOSTS,
+        transport=transport,
+        clock=clock,
+        sleep=clock.sleep,
+        resolver=public_resolver,
+    )
+    return fetcher, transport, clock
+
+
+def test_identity_encoding_requested_by_default_and_overridable() -> None:
+    fetcher, recorder, _ = make(ok)
+    fetcher.get("https://cercind.gov.in/")
+    fetcher.get("https://cercind.gov.in/", headers={"Accept-Encoding": "gzip"})
+    assert recorder.requests[0].headers["accept-encoding"] == "identity"
+    assert recorder.requests[1].headers["accept-encoding"] == "gzip"
+
+
+def test_gzip_bomb_stops_at_cap_without_full_expansion() -> None:
+    import gzip
+
+    bomb = gzip.compress(b"\0" * 20_000_000)  # about 20 KB on the wire
+    policy = dataclasses.replace(CERC_POLICY, max_document_bytes=100_000)
+    assert len(bomb) < policy.max_document_bytes
+    fetcher, _, _ = streaming(lambda: iter([bomb]), {"Content-Encoding": "gzip"}, policy)
+    response = fetcher.get("https://cercind.gov.in/bomb.pdf")
+    assert response.error == "too_large" and not fetcher.circuit_open
+    # The decoder itself never expands past the requested bound in one feed.
+    decoder = http_module._BoundedDecoder.for_encoding("gzip")
+    assert decoder is not None
+    assert sum(len(piece) for piece in decoder.feed(bomb, 1_001)) <= 1_001
+
+
+def test_compressed_bodies_within_cap_are_decoded() -> None:
+    import gzip
+    import zlib
+
+    payload = b"<html>" + b"x" * 500 + b"</html>"
+    raw_deflate = zlib.compressobj(wbits=-zlib.MAX_WBITS)
+    bodies = {
+        "gzip": gzip.compress(payload),
+        "deflate": zlib.compress(payload),
+        "x-gzip": gzip.compress(payload),
+    }
+    for encoding, body in bodies.items():
+        fetcher, _, _ = streaming(
+            lambda body=body: iter([body[:3], body[3:]]), {"Content-Encoding": encoding}
+        )
+        assert fetcher.get("https://cercind.gov.in/").body == payload, encoding
+    raw = raw_deflate.compress(payload) + raw_deflate.flush()
+    fetcher, _, _ = streaming(lambda: iter([raw]), {"Content-Encoding": "deflate"})
+    assert fetcher.get("https://cercind.gov.in/").body == payload
+    fetcher, _, _ = streaming(lambda: iter([b"\x00" * 10]), {"Content-Encoding": "br"})
+    assert fetcher.get("https://cercind.gov.in/").error == "unsupported_encoding"
+    plain, _, _ = streaming(lambda: iter([payload]), {})
+    assert plain.get("https://cercind.gov.in/").body == payload
+
+
+def test_slow_drip_body_hits_total_timeout_without_fallback() -> None:
+    clock_box: list[FakeClock] = []
+
+    def drip() -> Iterator[bytes]:
+        for _ in range(10):
+            clock_box[0].now += 50.0  # each chunk arrives inside the 120 s read timeout
+            yield b"x"
+
+    fetcher, transport, clock = streaming(drip, {"Content-Type": "text/html"})
+    clock_box.append(clock)
+    response = fetcher.get("https://cercind.gov.in/slow")
+    assert response.error == "total_timeout"  # deadline 3 x 120 s
+    assert len(transport.requests) == 1  # its own class: not in host_fallback_on
+    assert fetcher.consecutive_failed_urls == 1  # a network-class failure for the breaker
+    assert clock.now - 1_000.0 < 3 * 120 + 60
+
+
+def test_https_to_http_redirect_is_refused() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.url.scheme == "https":
+            return httpx.Response(302, headers={"Location": "http://cercind.gov.in/plain"})
+        return ok(request)
+
+    fetcher, recorder, _ = make(respond)
+    response = fetcher.get("https://cercind.gov.in/a")
+    assert response.error == "insecure_redirect" and len(recorder.requests) == 1
+    assert response.url == "http://cercind.gov.in/plain"
+    upgrade, recorder, _ = make(
+        lambda request: (
+            httpx.Response(301, headers={"Location": "https://cercind.gov.in/a"})
+            if request.url.scheme == "http"
+            else ok(request)
+        )
+    )
+    assert upgrade.get("http://cercind.gov.in/a").ok  # http -> https is allowed
+    assert not upgrade.circuit_open and upgrade.consecutive_failed_urls == 0
+
+
+def test_non_default_ports_are_refused() -> None:
+    fetcher, recorder, _ = make(ok)
+    assert fetcher.get("https://cercind.gov.in:8443/").error == "port_not_allowed"
+    assert fetcher.get("http://cercind.gov.in:8080/").error == "port_not_allowed"
+    assert recorder.requests == []
+    assert fetcher.get("https://cercind.gov.in:443/").ok
+    assert fetcher.get("http://cercind.gov.in:80/").ok
+    redirecting, recorder, _ = make(
+        lambda request: httpx.Response(302, headers={"Location": "https://cercind.gov.in:8443/"})
+    )
+    assert redirecting.get("https://cercind.gov.in/a").error == "port_not_allowed"
+    assert len(recorder.requests) == 1 and redirecting.consecutive_failed_urls == 0
