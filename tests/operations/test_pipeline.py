@@ -159,8 +159,9 @@ def _services(sender=None, *, recipients=RECIPIENTS, publisher=None, builder=Non
 
 def _run(data_dir, adapter, services, clock, *, mode="run", dry_run=False, no_email=False):
     registry = AdapterRegistry()
-    if adapter is not None:
-        registry.register(adapter)
+    for item in adapter if isinstance(adapter, list) else [adapter]:
+        if item is not None:
+            registry.register(item)
     return pipeline.run_pipeline(
         CONFIG,
         data_dir,
@@ -201,6 +202,143 @@ def test_baseline_has_no_outbox_and_sends_nothing(data_dir, adapter, clock) -> N
     manifest = DataStore(data_dir).load_run(report.run_id)
     assert manifest["context"]["delivery"] == "none"
     assert manifest["context"]["fetchers"]
+    assert manifest["context"]["skipped_live"] == []
+    # The deadline index and rolling view advance with the silent baseline.
+    assert list(index_from_data(DataStore(data_dir).load_deadline_index())) == [
+        f"doc:{report.run_id}"
+    ]
+    assert (data_dir / "open_deadlines.csv").read_text() == f"run,{report.run_id}\n"
+
+
+class FlakyAdapter(FakeAdapter):
+    """Fails until ``fail`` is cleared (a feed whose baseline is still pending)."""
+
+    def __init__(self, contract: FeedContract) -> None:
+        super().__init__(contract)
+        self.paths = ["docs/flaky.pdf"]
+        self.fail = True
+
+    def collect(self, contract, fetcher, *, observed_at):
+        if self.fail:
+            self.calls += 1
+            raise RuntimeError("site down")
+        return super().collect(contract, fetcher, observed_at=observed_at)
+
+
+def _urls(data_dir: Path) -> set[str]:
+    return {doc.canonical_url for doc in DataStore(data_dir).load_state().documents.values()}
+
+
+def test_rerun_baseline_skips_live_feeds_and_next_run_delivers(
+    data_dir, adapter, contracts, clock
+) -> None:
+    live_id = adapter.contract.feed_id
+    flaky = FlakyAdapter(contracts[sorted(contracts)[1]])
+    _run(data_dir, [adapter, flaky], pipeline.Services(), clock, mode="baseline")
+    store = DataStore(data_dir)
+    assert runner.is_live(store.load_state(), adapter.contract)
+    assert not runner.is_live(store.load_state(), flaky.contract)
+
+    # A real new publication on the live feed, then the operator reruns baseline.
+    adapter.paths.append("docs/b.pdf")
+    new_url = adapter.contract.base_url + "docs/b.pdf"
+    flaky.fail = False
+    calls = adapter.calls
+    second = _run(data_dir, [adapter, flaky], pipeline.Services(), clock, mode="baseline")
+    assert second.promoted and adapter.calls == calls  # live feed not even fetched
+    assert live_id not in {run.feed_id for run in second.feed_runs}
+    assert store.load_run(second.run_id)["context"]["skipped_live"] == [live_id]
+    assert new_url not in _urls(data_dir)  # not swallowed
+    assert runner.is_live(store.load_state(), flaky.contract)
+
+    sender = FakeSender()
+    report = _run(data_dir, [adapter, flaky], _services(sender), clock)
+    assert report.exit_code == 0 and report.delivery == "delivered" and len(sender.calls) == 1
+    new_docs = [
+        e for e in report.events
+        if e.event_type is EventType.NEW_DOCUMENT and e.discovery is Discovery.LIVE
+    ]  # fmt: skip
+    assert len(new_docs) == 1 and new_docs[0].feed_id == live_id
+    assert new_url in _urls(data_dir)
+
+
+def test_baseline_with_every_feed_live_changes_nothing(data_dir, adapter, clock) -> None:
+    contracts = config_module.load_contracts(config_module.load_config(CONFIG))
+    registry_adapters = [FakeAdapter(contract) for contract in contracts.values()]
+    for item in registry_adapters:
+        item.paths = [f"docs/{item.contract.feed_id}.pdf"]
+    _run(data_dir, registry_adapters, pipeline.Services(), clock, mode="baseline")
+    before = _tree(data_dir)
+    report = _run(data_dir, registry_adapters, pipeline.Services(), clock, mode="baseline")
+    assert report.exit_code == 0 and not report.promoted and report.feed_runs == ()
+    assert _tree(data_dir) == before
+
+
+def test_engine_and_enricher_receive_feed_sets(
+    data_dir, adapter, contracts, clock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from policy_tracker.core import engine
+
+    real = engine.apply_observation
+    seen_authoritative: list[frozenset[str]] = []
+
+    def apply(state, observation, contract, run, *, authoritative_feeds=None):
+        seen_authoritative.append(authoritative_feeds)
+        return real(state, observation, contract, run, authoritative_feeds=authoritative_feeds)
+
+    monkeypatch.setattr(engine, "apply_observation", apply)
+    seen_live: list[frozenset[str]] = []
+
+    def recording_enrich(state, events, contracts, fetcher_for, *, run, live_feed_ids=None,
+                         **options):  # fmt: skip
+        seen_live.append(live_feed_ids)
+        return fake_enrich(state, events, contracts, fetcher_for, run=run)
+
+    services = pipeline.Services(enricher=recording_enrich)
+    _run(data_dir, adapter, services, clock, mode="baseline")
+    expected = frozenset(
+        feed_id for feed_id, c in contracts.items() if c.decision == "track" and c.removal_authority
+    )
+    assert seen_authoritative and all(item == expected for item in seen_authoritative)
+    assert seen_live == [frozenset()]  # nothing was live before the first baseline
+    seen_digest: list[frozenset[str]] = []
+
+    class RecordingBuilder(FakeDigestBuilder):
+        def __call__(self, *args, authoritative_feeds=None, **kwargs):
+            seen_digest.append(authoritative_feeds)
+            return super().__call__(*args, **kwargs)
+
+    run_services = _services(FakeSender(), builder=RecordingBuilder())
+    run_services.enricher = recording_enrich
+    _run(data_dir, adapter, run_services, clock)
+    assert seen_live[-1] == frozenset({adapter.contract.feed_id})  # live in the base state
+    assert seen_digest == [expected]
+
+
+def test_crash_after_catalog_write_recovers_on_next_run(
+    data_dir, adapter, clock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _baseline(data_dir, adapter, clock)
+    adapter.paths.append("docs/b.pdf")
+    real = DataStore._write_schema
+    crashed: list[bool] = []
+
+    def crash_once(self):
+        if not crashed:
+            crashed.append(True)
+            raise KeyboardInterrupt("killed between catalog write and manifest")
+        real(self)
+
+    monkeypatch.setattr(DataStore, "_write_schema", crash_once)
+    sender = FakeSender()
+    with pytest.raises(KeyboardInterrupt):
+        _run(data_dir, adapter, _services(sender), clock)
+    (run_id,) = Outbox(data_dir).pending_ids()
+    report = _run(data_dir, adapter, _services(sender), clock)  # resend, then promote
+    assert report.exit_code == 0
+    assert sender.calls[0][0] == sender.calls[1][0] == make_message_id(run_id, "example.org")
+    assert DataStore(data_dir).load_run(run_id)["status"] == "promoted"
+    assert Outbox(data_dir).load_header(run_id).status is DeliveryStatus.DELIVERED
 
 
 def test_delivery_pushes_bundle_before_send_and_promotes_after(data_dir, adapter, clock) -> None:
@@ -241,8 +379,10 @@ def test_failed_delivery_stays_pending(data_dir, adapter, clock, outcome: str) -
     store = DataStore(data_dir)
     _baseline(data_dir, adapter, clock)
     base = store.state_hash()
+    health = store.health_path.read_bytes()
     adapter.paths.append("docs/b.pdf")
     report = _run(data_dir, adapter, _services(FakeSender([outcome])), clock)
+    assert store.health_path.read_bytes() == health  # health describes promoted state only
     assert report.exit_code == pipeline.EXIT_DELIVERY_PENDING and report.delivery == "pending"
     assert not report.promoted and store.state_hash() == base
     header = Outbox(data_dir).load_header(report.run_id)
@@ -520,12 +660,16 @@ def test_git_dry_run_pushes_nothing(git_remote, adapter, clock) -> None:
     _baseline(data, adapter, clock, publisher=_git_publisher(git_remote))
     adapter.paths.append("docs/b.pdf")
     head = git_remote.remote_head()
+    # Uncommitted local work in the data checkout must survive a dry run.
+    (data / "notes.txt").write_text("operator scratch\n")
+    (data / "schema.json").write_bytes((data / "schema.json").read_bytes() + b" ")
     before = _tree(data)
     sender = FakeSender()
     report = _run(data, adapter, _services(sender, publisher=_git_publisher(git_remote)), clock,
                   dry_run=True)  # fmt: skip
     assert git_remote.remote_head() == head and _tree(data) == before and sender.calls == []
-    assert report.dry_run_dir
+    assert report.dry_run_dir and report.data_commit == head
+    assert [e for e in report.events if e.event_type is EventType.NEW_DOCUMENT]
 
 
 def test_cli_init_branch_and_published_run(
@@ -619,3 +763,66 @@ def test_cli_with_real_reporting_modules(
     out = capsys.readouterr()
     for secret in ("pw-secret", *RECIPIENTS):
         assert secret not in out.out and secret not in out.err
+
+
+class DatedAdapter(FakeAdapter):
+    """Lists ``paths`` with a per-path publication date."""
+
+    def __init__(self, contract: FeedContract, dates: dict[str, str]) -> None:
+        super().__init__(contract)
+        self.paths = list(dates)
+        self.dates = dates
+
+    def collect(self, contract, fetcher, *, observed_at):
+        self.calls += 1
+        page = contract.url or contract.base_url
+        return FeedObservation(
+            feed_id=contract.feed_id,
+            site_id=contract.site_id,
+            observed_at=observed_at,
+            parser_version=contract.parser_version,
+            evidence=CollectionEvidence(
+                fetch_ok=True, parse_valid=True, enumeration_complete=True, pages_fetched=1
+            ),
+            documents=tuple(
+                ObservedDocument(
+                    url=contract.base_url + path,
+                    title=f"Document {path}",
+                    provenance=Provenance(page, f"row[{i}]"),
+                    published_raw=self.dates[path],
+                    published_date=self.dates[path],
+                )
+                for i, path in enumerate(self.paths)
+            ),
+        )
+
+
+def test_rolling_first_sighting_takes_authoritative_date(data_dir, contracts, clock) -> None:
+    rolling_c, authoritative_c = contracts["cerc_home"], contracts["cerc_public_notices"]
+    assert not rolling_c.removal_authority and authoritative_c.removal_authority
+    rolling = DatedAdapter(rolling_c, {"docs/home.pdf": "2026-09-01"})
+    authoritative = DatedAdapter(authoritative_c, {"docs/notices.pdf": "2026-09-02"})
+    adapters = [rolling, authoritative]
+    _run(data_dir, adapters, pipeline.Services(), clock, mode="baseline")
+
+    # The rolling home page lists the new notice first, with its own (posting) date.
+    rolling.paths.append("docs/new.pdf")
+    rolling.dates["docs/new.pdf"] = "2026-10-20"
+    first = _run(data_dir, adapters, _services(FakeSender()), clock)
+    assert first.exit_code == 0
+    url = rolling_c.base_url + "docs/new.pdf"
+
+    def new_doc():
+        (doc,) = [
+            d for d in DataStore(data_dir).load_state().documents.values()
+            if d.canonical_url == url
+        ]  # fmt: skip
+        return doc
+
+    assert new_doc().published_date == "2026-10-20"
+    # A week later the authoritative listing carries it with the issue date.
+    authoritative.paths.append("docs/new.pdf")
+    authoritative.dates["docs/new.pdf"] = "2026-10-01"
+    second = _run(data_dir, adapters, _services(FakeSender()), clock)
+    assert second.exit_code == 0
+    assert new_doc().published_date == "2026-10-01"

@@ -36,6 +36,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          # No token in .git/config: the job parses untrusted PDFs. The push
+          # credential reaches only the tracker step, as TRACKER_GIT_TOKEN.
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
@@ -46,6 +49,7 @@ jobs:
 
       - name: Run tracker
         env:
+          TRACKER_GIT_TOKEN: ${{ github.token }}
           SMTP_HOST: ${{ vars.SMTP_HOST }}
           SMTP_PORT: ${{ vars.SMTP_PORT }}
           SMTP_SECURITY: ${{ vars.SMTP_SECURITY }}

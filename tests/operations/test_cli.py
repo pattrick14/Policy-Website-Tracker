@@ -353,3 +353,20 @@ def test_run_without_smtp_config_is_blocked_before_crawl(
     assert _cli("run", "--config", str(CONFIG), "--data-dir", str(data_dir)) == 2
     assert adapter.calls == calls
     assert _tree(data_dir) == before
+
+
+def test_git_token_is_removed_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    import argparse
+    import os
+
+    from policy_tracker.operations import cli as cli_module
+
+    monkeypatch.setenv("TRACKER_GIT_TOKEN", "tok-secret")
+    token = cli_module.take_git_token()
+    assert token == "tok-secret" and "TRACKER_GIT_TOKEN" not in os.environ
+    args = argparse.Namespace(
+        publish=True, repo=Path("."), data_dir=Path("d"), remote="origin", git_token=token
+    )
+    publisher = cli_module._publisher(args)
+    assert publisher.auth_token == "tok-secret" and "tok-secret" not in repr(publisher)
+    assert cli_module.take_git_token() is None

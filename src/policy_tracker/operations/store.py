@@ -264,10 +264,13 @@ class DataStore:
         status: str = "recorded",
         rebaselines: Sequence[Mapping[str, str]] = (),
     ) -> None:
-        """Record a run's events, feed runs, manifest, and health without staging state.
+        """Record a run's events, feed runs and manifest without staging state.
 
         ``rebaselines`` holds ``{feed_id, reason, at}`` audit records; the frozen
         ``FeedState`` has no field for the reason, so the manifest and health keep it.
+        The manifest always records this run's per-feed health. ``health/feeds.json``
+        describes promoted state only: a ``not_promoted`` run (every feed failed, the
+        catalog unchanged) updates it now; a ``candidate`` run updates it at promotion.
         """
 
         self._require_initialized()
@@ -291,9 +294,14 @@ class DataStore:
                     "events": [serialize.to_data(event) for event in candidate.events],
                 },
             )
-        self._write_health(candidate, rebaselines)
+        if status != "candidate":
+            self._write_health(candidate, rebaselines)
         manifest = self._manifest(candidate, context=context, status=status)
         manifest["rebaselines"] = [dict(item) for item in rebaselines]
+        manifest["health"] = {
+            feed_run.feed_id: _feed_health(feed_run, candidate.state)
+            for feed_run in candidate.feed_runs
+        }
         _write_json(run_path, manifest)
 
     def write_candidate(
@@ -323,7 +331,13 @@ class DataStore:
         self.write_run(candidate, context=context, status="candidate", rebaselines=rebaselines)
 
     def promote(self, candidate: CandidateState) -> str:
-        """Compare-and-swap the catalog to ``candidate.state``; return the new state hash."""
+        """Compare-and-swap the catalog to ``candidate.state``; return the new state hash.
+
+        Publishes, with the catalog, the staged deadline index and rolling views and
+        the run's feed health. If the catalog already equals the candidate state (a
+        crash after the catalog write but before the manifest was marked), the
+        remaining steps are completed instead of raising ``PromotionConflict``.
+        """
 
         self._require_initialized()
         run_path = self.run_path(candidate.run_id)
@@ -333,14 +347,14 @@ class DataStore:
         if manifest.get("status") == "promoted":
             raise StoreError(f"run {candidate.run_id} is already promoted")
         current = self.state_hash()
-        if current != candidate.base_state_hash:
+        new_hash = serialize.state_hash(candidate.state)
+        if current not in (candidate.base_state_hash, new_hash):
             raise PromotionConflict(
                 f"catalog state {current[:12]} is not candidate base "
                 f"{candidate.base_state_hash[:12]}; refusing to overwrite newer state"
             )
-        new_hash = serialize.state_hash(candidate.state)
         staged = self.candidate_dir(candidate.run_id)
-        self._write_catalog(self.catalog_dir, candidate.state)
+        self._write_catalog(self.catalog_dir, candidate.state)  # idempotent; migrates files
         index = staged / "catalog" / DEADLINE_INDEX
         if index.is_file():
             _atomic_write_bytes(self.catalog_dir / DEADLINE_INDEX, index.read_bytes())
@@ -348,6 +362,7 @@ class DataStore:
             rolling = staged / "rolling" / name
             if rolling.is_file():
                 _atomic_write_bytes(self.root / name, rolling.read_bytes())
+        self._write_health(candidate, [dict(item) for item in manifest.get("rebaselines") or ()])
         self._write_schema()
         manifest["status"] = "promoted"
         manifest["promoted_state_hash"] = new_hash

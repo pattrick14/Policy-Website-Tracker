@@ -12,6 +12,13 @@ an active send is never cancelled. Neither triggers on pushes, so the tracker's
 own `tracker-data` commits cannot start runs. Both need `contents: write` and
 nothing else.
 
+Both check out with `persist-credentials: false` and pass `github.token` only to
+the `policy-tracker` step, as `TRACKER_GIT_TOKEN`. The CLI removes it from the
+environment at startup and adds it to the git `ls-remote`/`fetch`/`push`
+subprocesses as a per-command `http.extraheader` (through `GIT_CONFIG_*`
+environment variables). It is never written to `.git/config`. See "Push
+credential" in `docs/OPERATIONS.md` for the residual risk.
+
 Manual dispatch inputs for `tracker.yml`:
 
 - `mode`: `run` (default) or `baseline` (silent; never emails).

@@ -19,6 +19,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          # No token in .git/config: the job parses untrusted PDFs. The push
+          # credential reaches only the tracker step, as TRACKER_GIT_TOKEN.
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
@@ -28,6 +31,8 @@ jobs:
         run: pip install .
 
       - name: Create tracker-data
+        env:
+          TRACKER_GIT_TOKEN: ${{ github.token }}
         run: >-
           policy-tracker init-data-branch
           --data-dir "$RUNNER_TEMP/tracker-data"

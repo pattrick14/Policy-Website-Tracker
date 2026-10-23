@@ -1,12 +1,17 @@
 """Publish the orphan ``tracker-data`` branch with compare-and-swap pushes (D-010).
 
 ``GitPublisher`` drives ``git`` through ``subprocess`` in a dedicated worktree of a
-repository whose remote already carries credentials (in GitHub Actions, the
-``actions/checkout`` clone of ``main``). It never force-pushes:
+repository (in GitHub Actions, the ``actions/checkout`` clone of ``main``, made
+with ``persist-credentials: false``). Credentials are never written to
+``.git/config``: an ``auth_token`` is sent as an ``http.<host>.extraheader``
+through ``GIT_CONFIG_*`` environment variables of the network commands only
+(``ls-remote``, ``fetch``, ``push``). It never force-pushes:
 
 - ``init_data_branch`` creates the branch once and refuses if it already exists;
 - ``checkout_data`` resets the worktree to the remote head (optionally asserting
   it equals an expected commit) and refuses a missing branch;
+- ``snapshot_data`` exports the remote head into a fresh directory (``git
+  archive``) for dry runs, without touching the worktree;
 - ``commit_and_push`` fetches, checks the remote head still equals the expected
   commit, and pushes a fast-forward; any mismatch or rejection raises
   ``BranchRace`` and leaves remote history untouched.
@@ -14,15 +19,19 @@ repository whose remote already carries credentials (in GitHub Actions, the
 
 from __future__ import annotations
 
+import base64
+import io
 import os
 import shutil
 import subprocess
+import tarfile
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 DATA_BRANCH = "tracker-data"
 DEFAULT_AUTHOR = ("policy-tracker[bot]", "policy-tracker@users.noreply.github.com")
+NETWORK_COMMANDS = frozenset({"ls-remote", "fetch", "push"})
 
 
 class GitError(RuntimeError):
@@ -51,6 +60,25 @@ class GitPublisher:
     branch: str = DATA_BRANCH
     author: tuple[str, str] = DEFAULT_AUTHOR
     timeout: float = 300.0
+    # Push/fetch credential (e.g. the Actions token); sent per network command only.
+    auth_token: str | None = field(default=None, repr=False)
+    auth_url: str = "https://github.com/"
+
+    def _auth_env(self, base: dict[str, str]) -> dict[str, str]:
+        """``GIT_CONFIG_*`` entries adding the auth header (never argv, never a file)."""
+
+        if not self.auth_token:
+            return {}
+        try:
+            count = int(base.get("GIT_CONFIG_COUNT", "0") or "0")
+        except ValueError:
+            count = 0
+        basic = base64.b64encode(f"x-access-token:{self.auth_token}".encode()).decode("ascii")
+        return {
+            "GIT_CONFIG_COUNT": str(count + 1),
+            f"GIT_CONFIG_KEY_{count}": f"http.{self.auth_url}.extraheader",
+            f"GIT_CONFIG_VALUE_{count}": f"AUTHORIZATION: basic {basic}",
+        }
 
     def __post_init__(self) -> None:
         self.repo = Path(self.repo).resolve()
@@ -62,7 +90,7 @@ class GitPublisher:
     def _tracking_ref(self) -> str:
         return f"refs/remotes/{self.remote}/{self.branch}"
 
-    def _run(self, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+    def _env(self, command: str) -> dict[str, str]:
         name, email = self.author
         env = {
             **os.environ,
@@ -72,6 +100,12 @@ class GitPublisher:
             "GIT_COMMITTER_EMAIL": email,
             "GIT_TERMINAL_PROMPT": "0",
         }
+        if command in NETWORK_COMMANDS:
+            env.update(self._auth_env(env))
+        return env
+
+    def _run(self, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+        env = self._env(args[0])
         command = ["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", *args]
         try:
             return subprocess.run(
@@ -179,6 +213,39 @@ class GitPublisher:
         if expected_base is not None and head != expected_base:
             raise BranchRace(f"{self.branch} is at {head[:12]}, expected {expected_base[:12]}")
         self._prepare_worktree(head)
+        self.head = head
+        return head
+
+    def snapshot_data(self, target: Path) -> str:
+        """Export the remote head into the new directory ``target``; return the head.
+
+        Read-only for the worktree (a dry run must not reset or clean it): only the
+        remote-tracking ref is fetched. ``target`` gets no ``.git``.
+        """
+
+        head = self.remote_head()
+        if head is None:
+            raise DataBranchMissing(
+                f"{self.remote}/{self.branch} does not exist; run the init-data-branch workflow"
+            )
+        target = Path(target)
+        target.mkdir(parents=True, exist_ok=False)
+        try:
+            result = subprocess.run(
+                ["git", "archive", "--format=tar", head],
+                cwd=self.repo,
+                env=self._env("archive"),
+                capture_output=True,
+                timeout=self.timeout,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise GitError(f"git archive could not run: {type(exc).__name__}") from None
+        if result.returncode != 0:
+            first = (result.stderr.decode("utf-8", "replace").strip().splitlines() or [""])[0]
+            raise GitError(f"git archive failed ({result.returncode}): {_scrub(first)}")
+        with tarfile.open(fileobj=io.BytesIO(result.stdout), mode="r:") as archive:
+            archive.extractall(target, filter="data")
         self.head = head
         return head
 

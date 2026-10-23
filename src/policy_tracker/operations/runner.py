@@ -8,6 +8,7 @@ lives in ``policy_tracker.operations.pipeline``; ``run_feeds`` delegates to it.
 from __future__ import annotations
 
 import dataclasses
+import inspect
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -138,6 +139,40 @@ def feed_order(state: CatalogState, contracts: Mapping[str, FeedContract]) -> li
     return sorted(contracts, key=lambda feed_id: (not is_live(state, contracts[feed_id]), feed_id))
 
 
+def accepts_keyword(func: Callable[..., object], name: str) -> bool:
+    """Whether ``func`` takes keyword ``name`` (explicitly or through ``**kwargs``)."""
+
+    try:
+        parameters = inspect.signature(func).parameters.values()
+    except (TypeError, ValueError):
+        return False
+    return any(
+        p.kind is inspect.Parameter.VAR_KEYWORD
+        or (p.name == name and p.kind is not inspect.Parameter.POSITIONAL_ONLY)
+        for p in parameters
+    )
+
+
+def authoritative_feeds(contracts: Mapping[str, FeedContract]) -> frozenset[str]:
+    """Tracked feeds whose complete enumerations may establish removal."""
+
+    return frozenset(
+        feed_id
+        for feed_id, contract in contracts.items()
+        if contract.decision == "track" and contract.removal_authority
+    )
+
+
+def live_feeds(state: CatalogState, contracts: Mapping[str, FeedContract]) -> frozenset[str]:
+    """Tracked feeds that are live (``is_live``) in ``state``."""
+
+    return frozenset(
+        feed_id
+        for feed_id, contract in contracts.items()
+        if contract.decision == "track" and is_live(state, contract)
+    )
+
+
 def evaluate_feeds(
     state: CatalogState,
     contracts: dict[str, FeedContract],
@@ -146,22 +181,32 @@ def evaluate_feeds(
     registry: AdapterRegistry,
     fetcher_factory: FetcherFactory,
     now: Callable[[], str],
+    skip: frozenset[str] = frozenset(),
 ) -> tuple[CatalogState, tuple[Event, ...], tuple[FeedRun, ...]]:
-    """Apply every tracked contract sequentially, in ``feed_order``."""
+    """Apply every tracked contract except ``skip`` sequentially, in ``feed_order``.
+
+    Every ``apply_observation`` call receives ``authoritative_feeds`` (all tracked
+    contracts with removal authority, skipped or not) when the engine accepts it.
+    """
 
     events: list[Event] = []
     feed_runs: list[FeedRun] = []
     tracked = {k: c for k, c in contracts.items() if c.decision == "track"}
+    extra: dict[str, object] = {}
+    if accepts_keyword(engine.apply_observation, "authoritative_feeds"):
+        extra["authoritative_feeds"] = authoritative_feeds(tracked)
     for contract in tracked.values():
         state = engine.ensure_feed_state(state, contract)
     for feed_id in feed_order(state, tracked):
+        if feed_id in skip:
+            continue
         contract = tracked[feed_id]
         observation, reason = _collect(contract, registry, fetcher_factory, now())
         try:
-            outcome = engine.apply_observation(state, observation, contract, run)
+            outcome = engine.apply_observation(state, observation, contract, run, **extra)
         except ValueError as exc:  # malformed observation: fail this feed, keep its state
             reason = f"engine_rejected: {exc}"
-            outcome = engine.apply_observation(state, None, contract, run)
+            outcome = engine.apply_observation(state, None, contract, run, **extra)
         feed_run = outcome.feed_run
         if reason is not None and reason not in feed_run.diagnostics:
             feed_run = dataclasses.replace(feed_run, diagnostics=(*feed_run.diagnostics, reason))

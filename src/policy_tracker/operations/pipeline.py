@@ -10,10 +10,13 @@
    delivered, and commit and push again.
 6. Partial acceptance, refusal or an ambiguous timeout leaves the entry pending
    (the attempt is recorded and pushed) and the run exits ``EXIT_DELIVERY_PENDING``.
-7. ``baseline`` promotes silently: no digest, no outbox entry, no email.
+7. ``baseline`` promotes silently: no digest, no outbox entry, no email. It
+   skips feeds that are already live (recorded as ``skipped_live``), so a live
+   feed's new publications wait for the next ``run`` instead of being absorbed.
 
 ``dry_run`` performs no email, commit, push or durable mutation; it renders into
-a temporary directory. ``no_email`` (``run`` only) archives the digest and
+a temporary directory. With a publisher it reads the remote data head into a
+throwaway snapshot and never touches the data checkout. ``no_email`` (``run`` only) archives the digest and
 promotes without an outbox entry. Every collaborator is injected through
 ``Services`` so tests run offline.
 """
@@ -87,6 +90,7 @@ class DigestBuilder(Protocol):
         generated_at: str,
         previous_run_at: str | None,
         previous_deadlines: Any = None,
+        authoritative_feeds: frozenset[str] | None = None,  # optional keyword
     ) -> tuple[Digest, Any]: ...
 
 
@@ -98,6 +102,7 @@ class Sender(Protocol):
 
 class Publisher(Protocol):
     def checkout_data(self, expected_base: str | None = None) -> str: ...
+    def snapshot_data(self, target: Path) -> str: ...
     def commit_and_push(self, message: str, expected_remote_head: str) -> str: ...
 
 
@@ -270,9 +275,61 @@ def run_pipeline(
     chash = config_module.config_hash(Path(config_path))
 
     publisher = services.publisher
+    if dry_run and publisher is not None:
+        # Never reset the data checkout in a dry run: read the remote head into a
+        # throwaway snapshot instead (no commit or push happens in a dry run).
+        with tempfile.TemporaryDirectory(prefix="policy-tracker-snapshot-") as tmp:
+            snapshot = Path(tmp) / "tracker-data"
+            head = publisher.snapshot_data(snapshot)
+            store = DataStore(snapshot)
+            session = _Session(store=store, outbox=Outbox(store.root), publisher=None, head=head)
+            return _run_session(
+                session, contracts, chash, registry=registry, fetcher_factory=fetcher_factory,
+                mode=mode, dry_run=True, deliver=deliver, code_revision=code_revision, now=now,
+                services=services,
+            )  # fmt: skip
     head = publisher.checkout_data() if publisher is not None else None
     store = DataStore(Path(data_dir))
     session = _Session(store=store, outbox=Outbox(store.root), publisher=publisher, head=head)
+    return _run_session(
+        session, contracts, chash, registry=registry, fetcher_factory=fetcher_factory,
+        mode=mode, dry_run=dry_run, deliver=deliver, code_revision=code_revision, now=now,
+        services=services,
+    )  # fmt: skip
+
+
+def _digest_options(services: Services, contracts: Mapping[str, FeedContract]) -> dict[str, Any]:
+    """``authoritative_feeds`` for the digest builder, when it accepts the keyword."""
+
+    builder = services.digest_builder
+    if builder is not None and runner.accepts_keyword(builder, "authoritative_feeds"):
+        return {"authoritative_feeds": runner.authoritative_feeds(contracts)}
+    return {}
+
+
+def _enrich_options(services: Services, live_feed_ids: frozenset[str]) -> dict[str, Any]:
+    options = dict(services.enrich_options)
+    if services.enricher is not None and runner.accepts_keyword(services.enricher, "live_feed_ids"):
+        options.setdefault("live_feed_ids", live_feed_ids)
+    return options
+
+
+def _run_session(
+    session: _Session,
+    contracts: dict[str, FeedContract],
+    chash: str,
+    *,
+    registry: AdapterRegistry,
+    fetcher_factory: runner.FetcherFactory,
+    mode: runner.Mode,
+    dry_run: bool,
+    deliver: bool,
+    code_revision: str,
+    now: Callable[[], str],
+    services: Services,
+) -> runner.RunReport:
+    store = session.store
+    head = session.head
     messages: list[str] = []
 
     # (1) Retry pending deliveries before crawling.
@@ -340,15 +397,51 @@ def run_pipeline(
         config_hash=chash,
         code_revision=code_revision,
     )
+    live_before = runner.live_feeds(base_state, contracts)
+    # baseline never evaluates a live feed: its new items would be promoted unemailed.
+    skipped_live = tuple(sorted(live_before)) if mode == "baseline" else ()
+    if mode == "baseline" and live_before:
+        messages.append(
+            f"baseline mode: skipped {len(skipped_live)} live feed(s); "
+            "their changes are reported by the next run"
+        )
+    tracked = {k for k, c in contracts.items() if c.decision == "track"}
+    if mode == "baseline" and tracked and tracked <= live_before:
+        messages.append("baseline mode: every tracked feed is live; nothing to baseline")
+        current = state_hash(base_state)
+        return runner.RunReport(
+            run_id=run.run_id,
+            mode=mode,
+            dry_run=dry_run,
+            promoted=False,
+            base_state_hash=current,
+            state_hash=current,
+            feed_runs=(),
+            events=(),
+            messages=tuple(messages),
+            data_commit=session.head,
+            exit_override=runner.EXIT_OK,
+        )
     state, events, feed_runs = runner.evaluate_feeds(
-        base_state, contracts, run, registry=registry, fetcher_factory=fetcher_factory, now=now
+        base_state,
+        contracts,
+        run,
+        registry=registry,
+        fetcher_factory=fetcher_factory,
+        now=now,
+        skip=frozenset(skipped_live),
     )
     all_failed = not any(feed_run.accepted for feed_run in feed_runs)
     texts: Mapping[str, ExtractedText] = {}
     if not all_failed and services.enricher is not None:
         try:
             enriched = services.enricher(
-                state, events, contracts, fetcher_factory, run=run, **services.enrich_options
+                state,
+                events,
+                contracts,
+                fetcher_factory,
+                run=run,
+                **_enrich_options(services, live_before),
             )
         except Exception as exc:  # noqa: BLE001 - enrichment never sinks discovery
             messages.append(f"enrichment failed ({type(exc).__name__}); listing data kept")
@@ -366,6 +459,9 @@ def run_pipeline(
         feed_runs=feed_runs,
     )
     fetchers = _fetcher_states(services, contracts)
+    extra_context: dict[str, Any] = {"fetchers": fetchers}
+    if mode == "baseline":
+        extra_context["skipped_live"] = list(skipped_live)
     live = sum(1 for event in events if event.discovery is Discovery.LIVE)
     if mode == "baseline" and live:
         messages.append(
@@ -390,27 +486,37 @@ def run_pipeline(
     if all_failed:
         messages.append("all feeds failed: catalog not promoted")
         if not dry_run:
-            context = _context(mode, started_at, dry_run, base_data_commit, fetchers=fetchers)
+            context = _context(mode, started_at, dry_run, base_data_commit, **extra_context)
             store.write_run(candidate, context=context, status="not_promoted")
             session.commit(f"run {run.run_id}: all feeds failed; diagnostics recorded")
         return report()
-
-    if mode == "baseline":
-        if dry_run:
-            return report()
-        context = _context(
-            mode, started_at, dry_run, base_data_commit, delivery="none", fetchers=fetchers
-        )
-        store.write_candidate(candidate, context=context)
-        store.promote(candidate)
-        session.commit(f"run {run.run_id}: baseline promoted silently (no email)")
-        return report(promoted=True)
 
     files: list[RenderedFile] = []
     rolling: list[RenderedFile] = []
     email: RenderedEmail | None = None
     index_data: Mapping[str, Any] | None = None
     generated_at: str | None = None
+    if mode == "baseline":
+        # Silent: no digest files or email, but the deadline index and rolling views
+        # advance with the catalog, so the next run's changes-only digest does not
+        # report baselined deadlines as new.
+        if services.digest_builder is not None and not dry_run:
+            index_data, rolling = _baseline_views(
+                store, candidate, base_state, texts, services, contracts, now
+            )
+        if dry_run:
+            return report()
+        context = _context(
+            mode, started_at, dry_run, base_data_commit, delivery="none", **extra_context
+        )
+        store.write_candidate(candidate, context=context)
+        if index_data is not None:
+            store.stage_deadline_index(run.run_id, index_data)
+        store.stage_rolling(run.run_id, [(f.path, f.content) for f in rolling])
+        store.promote(candidate)
+        session.commit(f"run {run.run_id}: baseline promoted silently (no email)")
+        return report(promoted=True)
+
     if services.digest_builder is not None and services.renderer is not None:
         previous_index = store.load_deadline_index()
         generated_at = now()
@@ -423,6 +529,7 @@ def run_pipeline(
             previous_deadlines=(
                 services.decode_deadlines(previous_index) if previous_index is not None else None
             ),
+            **_digest_options(services, contracts),
         )
         index_data = services.encode_deadlines(index) if index is not None else None
         files = [render(digest) for render in services.renderer.files]
@@ -450,8 +557,8 @@ def run_pipeline(
         dry_run,
         base_data_commit,
         delivery=delivery_mode,
-        fetchers=fetchers,
         generated_at=generated_at,
+        **extra_context,
     )
     store.write_candidate(candidate, context=context)
     if index_data is not None:
@@ -494,6 +601,35 @@ def run_pipeline(
         artifacts=artifacts,
         exit_override=None if outcome.delivered else EXIT_DELIVERY_PENDING,
     )
+
+
+def _baseline_views(
+    store: DataStore,
+    candidate: CandidateState,
+    base_state: CatalogState,
+    texts: Mapping[str, ExtractedText],
+    services: Services,
+    contracts: Mapping[str, FeedContract],
+    now: Callable[[], str],
+) -> tuple[Mapping[str, Any] | None, list[RenderedFile]]:
+    """The deadline index and rolling views a silent baseline promotes (no digest files)."""
+
+    assert services.digest_builder is not None
+    previous_index = store.load_deadline_index()
+    digest, index = services.digest_builder(
+        candidate,
+        base_state,
+        texts,
+        generated_at=now(),
+        previous_run_at=store.last_promoted_run_at(),
+        previous_deadlines=(
+            services.decode_deadlines(previous_index) if previous_index is not None else None
+        ),
+        **_digest_options(services, contracts),
+    )
+    index_data = services.encode_deadlines(index) if index is not None else None
+    rolling = [render(digest) for render in services.renderer.rolling] if services.renderer else []
+    return index_data, rolling
 
 
 def abandon_delivery(

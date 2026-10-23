@@ -101,3 +101,57 @@ def test_existing_non_worktree_directory_refused(git_remote: GitRemote, tmp_path
     with pytest.raises(Exception, match="not a worktree"):
         GitPublisher(repo=git_remote.main, worktree=data).checkout_data()
     assert (data / "file.txt").read_text() == "user data"
+
+
+def test_auth_token_goes_only_to_network_commands(
+    git_remote: GitRemote, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import subprocess
+
+    from policy_tracker.operations import publish
+
+    publisher = GitPublisher(
+        repo=git_remote.main, worktree=git_remote.tmp / "data", auth_token="tok-secret"
+    )
+    _p, base = _init(git_remote)  # unauthenticated publisher creates the branch
+    real = subprocess.run
+    calls: list[tuple[list[str], dict[str, str]]] = []
+
+    def recording(command, **kwargs):
+        calls.append((list(command), dict(kwargs.get("env") or {})))
+        return real(command, **kwargs)
+
+    monkeypatch.setattr(publish.subprocess, "run", recording)
+    head = publisher.checkout_data()
+    (publisher.worktree / "runs" / "note.txt").write_text("x\n")
+    publisher.commit_and_push("authenticated push", head)
+    assert git_remote.remote_head() != base
+    network = {"ls-remote", "fetch", "push"}
+    seen = set()
+    for command, env in calls:
+        if "core.hooksPath=/dev/null" not in command:
+            continue  # the test helper's own git calls
+        sub = next(arg for arg in command[1:] if not arg.startswith("-") and "=" not in arg)
+        assert "tok-secret" not in " ".join(command)  # never in argv
+        has_header = any(
+            v == "http.https://github.com/.extraheader"
+            for k, v in env.items()
+            if k.startswith("GIT_CONFIG_KEY_")
+        )
+        assert has_header is (sub in network), command
+        seen.add(sub)
+    assert network <= seen
+    for config in (git_remote.main / ".git" / "config",):
+        assert "tok-secret" not in config.read_text()
+        assert "extraheader" not in config.read_text()
+
+
+def test_snapshot_exports_remote_head_without_touching_worktree(git_remote: GitRemote) -> None:
+    publisher, base = _init(git_remote)
+    publisher.checkout_data()
+    (publisher.worktree / "scratch.txt").write_text("local\n")
+    target = git_remote.tmp / "snap" / "tracker-data"
+    assert publisher.snapshot_data(target) == base
+    assert (target / "schema.json").is_file() and not (target / ".git").exists()
+    assert (publisher.worktree / "scratch.txt").read_text() == "local\n"
+    assert DataStore(target).load_state() == DataStore(publisher.worktree).load_state()

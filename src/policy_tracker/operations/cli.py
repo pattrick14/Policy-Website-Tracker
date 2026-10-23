@@ -29,6 +29,23 @@ from policy_tracker.reporting.digest import build_digest
 
 DEFAULT_CONFIG = Path("config/sources.yaml")
 EXIT_ERROR = 2
+GIT_TOKEN_ENV = "TRACKER_GIT_TOKEN"  # data-branch push credential (see OPERATIONS.md)
+
+
+def take_git_token() -> str | None:
+    """Remove ``TRACKER_GIT_TOKEN`` from the environment and return it.
+
+    Removing it first means the PDF parser and OCR child processes, which inherit
+    ``os.environ``, never see it; only ``GitPublisher`` network commands get it.
+    """
+
+    token = os.environ.pop(GIT_TOKEN_ENV, "").strip()
+    return token or None
+
+
+def _git_auth_url() -> str:
+    server = os.environ.get("GITHUB_SERVER_URL", "https://github.com").strip().rstrip("/")
+    return f"{server or 'https://github.com'}/"
 
 
 def default_fetcher_factory(contract: FeedContract) -> Fetcher:
@@ -80,7 +97,13 @@ def default_renderer() -> pipeline.Renderer:
 def _publisher(args: argparse.Namespace) -> GitPublisher | None:
     if not getattr(args, "publish", False):
         return None
-    return GitPublisher(repo=args.repo, worktree=args.data_dir, remote=args.remote)
+    return GitPublisher(
+        repo=args.repo,
+        worktree=args.data_dir,
+        remote=args.remote,
+        auth_token=getattr(args, "git_token", None),
+        auth_url=_git_auth_url(),
+    )
 
 
 DEFAULT_MAX_DOCUMENTS = 200
@@ -270,7 +293,13 @@ def _run_command(args: argparse.Namespace) -> int:
 
 
 def _init_data_branch(args: argparse.Namespace) -> int:
-    publisher = GitPublisher(repo=args.repo, worktree=args.data_dir, remote=args.remote)
+    publisher = GitPublisher(
+        repo=args.repo,
+        worktree=args.data_dir,
+        remote=args.remote,
+        auth_token=getattr(args, "git_token", None),
+        auth_url=_git_auth_url(),
+    )
     commit = publisher.init_data_branch(
         lambda root: DataStore(root).initialize(), "Initialize tracker-data layout"
     )
@@ -296,6 +325,7 @@ def _outbox_status(args: argparse.Namespace) -> int:
 def main(argv: Sequence[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     args = build_parser().parse_args(argv)
+    args.git_token = take_git_token()  # before anything parses untrusted documents
     try:
         if args.command == "validate-config":
             return _validate_config(args.config)

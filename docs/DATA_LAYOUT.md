@@ -66,18 +66,24 @@ unique within a run; archive consumers key events on `(run_id, event_id)`.
 `runs/<run_id>.json` holds `status` (`candidate`, `promoted` or
 `not_promoted`), `config_hash`, `code_revision`, `base_state_hash`,
 `candidate_state_hash`, `promoted_state_hash` (after promotion), `event_count`,
-`events_path`, every `FeedRun`, a free-form `context` (mode, started_at,
-dry_run) and `rebaselines` (`[{feed_id, reason, at}]`; the frozen `FeedState`
-has no field for a rebaseline reason, so the audit record lives here and as
-`last_rebaseline` in `health/feeds.json`).
+`events_path`, every `FeedRun`, `health` (this run's per-feed health entries,
+same format as `health/feeds.json`), a free-form `context` (mode, started_at,
+dry_run; baselines add `skipped_live`, the feeds that were already live and were
+not evaluated) and `rebaselines` (`[{feed_id, reason, at}]`; the frozen
+`FeedState` has no field for a rebaseline reason, so the audit record lives here
+and as `last_rebaseline` in `health/feeds.json`).
 
 ### Health
 
 `health/feeds.json` maps each feed id to its latest fetch/parse/enumeration
 status, acceptance, item counts, quarantine reasons, diagnostics, and the
 baseline status and `consecutive_failures` of the run's candidate state. Feeds
-absent from a run keep their previous entry. Health is written for every
-recorded run, including runs that are not promoted.
+absent from a run keep their previous entry. `health/feeds.json` describes
+promoted state only: a candidate's health is published by `promote`, together
+with its catalog, so a pending or abandoned delivery never leaves health
+describing unpromoted state. A `not_promoted` run whose every feed failed (the
+catalog is unchanged) updates it immediately. Every run's own health is always
+in its manifest.
 
 ## Writes and promotion protocol
 
@@ -89,24 +95,32 @@ fsync, `os.replace`, fsync the directory. A run proceeds as follows:
 2. The runner applies every tracked feed (live feeds first, then baselining and
    backfill feeds, each group in feed-id order) and builds a `CandidateState`.
 3. `write_candidate(candidate)` stages `candidates/<run_id>/`, then writes the
-   events and health, then writes `runs/<run_id>.json` last with status
-   `candidate`. Nothing in `catalog/` changes.
+   events, then writes `runs/<run_id>.json` last with status `candidate`
+   (including the run's health). Nothing in `catalog/` or `health/` changes.
 4. Weekly runs (`pipeline.run_pipeline`) also stage `catalog/deadlines.json`
    and `rolling/open_deadlines.csv` in the candidate directory, write the
    per-run digests under `digests/`, create the outbox bundle, and commit and
    push all of it before SMTP. Promotion (step 5) happens only after every
-   recipient accepted; baselines skip the digest and the outbox.
+   recipient accepted. Baselines skip the digest files and the outbox but stage
+   the deadline index and `open_deadlines.csv` the same way, so the next weekly
+   digest compares against deadlines that include the baselined records.
 5. `promote(candidate)` is a compare-and-swap. It refuses (`PromotionConflict`)
-   unless the current catalog's state hash equals `candidate.base_state_hash`.
-   It also refuses unless the run is recorded and not yet promoted. It then
-   rewrites `catalog/` (including a staged `deadlines.json`), copies a staged
-   `open_deadlines.csv` to the root, rewrites `schema.json`, marks the manifest
-   `promoted`, and deletes the staged candidate. A failed send therefore never
-   advances the deadline index or the open-deadlines view.
+   unless the current catalog's state hash equals `candidate.base_state_hash`,
+   or already equals the candidate's own state hash (a crash after the catalog
+   write but before the manifest was marked: promotion then finishes the
+   remaining steps instead of failing forever). It also refuses unless the run
+   is recorded and not yet promoted. It then rewrites `catalog/` (including a
+   staged `deadlines.json`), copies a staged `open_deadlines.csv` to the root,
+   publishes the run's feed health to `health/feeds.json`, rewrites
+   `schema.json`, marks the manifest `promoted`, and deletes the staged
+   candidate. A failed send therefore never advances the deadline index, the
+   open-deadlines view, or the health file.
 
 If every feed fails, the runner calls `write_run(..., status="not_promoted")`
 instead. That records the manifest, events and health without staging or
-promoting. `--dry-run` reads only and writes nothing at all. `rebaseline-feed`
+promoting. `--dry-run` reads only and writes nothing at all; with `--publish`
+it reads the remote head into a temporary snapshot (`git archive`) and leaves
+the data checkout untouched. `rebaseline-feed`
 goes through the same `write_candidate`/`promote` path with no feed runs.
 
 Promotion rewrites five catalog files one at a time, so a crash in the middle

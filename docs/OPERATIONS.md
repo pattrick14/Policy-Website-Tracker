@@ -42,6 +42,26 @@ delivery still pending (SMTP refused, partial acceptance, or ambiguous timeout);
   requests and pushes to `main` with a read-only token and no secrets.
 - Permissions are `contents: write` only, for pushing `tracker-data`.
 
+## Push credential
+
+The jobs parse untrusted PDFs and HTML, so the `contents: write` token is kept
+off disk. `actions/checkout` runs with `persist-credentials: false` (nothing in
+`.git/config`). The token reaches only the tracker step, as the environment
+variable `TRACKER_GIT_TOKEN`. The CLI removes it from `os.environ` before doing
+anything else and hands it to `GitPublisher`. The publisher sends it as an
+`http.<server>/.extraheader` (`AUTHORIZATION: basic …`) through
+`GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_n`/`GIT_CONFIG_VALUE_n` in the environment of
+the `git ls-remote`, `fetch` and `push` subprocesses only. It never goes in argv
+or in a file. PDF parsing (spawned `pypdf` children) and OCR (`pdftoppm`,
+`tesseract`) inherit `os.environ` after the token was removed, so they never
+see it. Without `TRACKER_GIT_TOKEN`, git uses whatever credentials the remote
+already has (local use).
+
+Residual risk: the token stays in the memory of the main Python process for the
+whole run. That process also parses listing HTML (BeautifulSoup), so a code
+execution bug there could read it. The token is the job-scoped `GITHUB_TOKEN`
+and expires when the job ends. The SMTP secrets share that process environment.
+
 ## Branches
 
 - `main`: code, configuration, tests, and documentation.
@@ -99,7 +119,13 @@ only; the `To` header is `undisclosed-recipients:;`.
    commit and push again.
 6. Partial acceptance, refusal, or an ambiguous timeout records the attempt
    (counts only), keeps the entry pending, pushes, and exits 3.
-7. `baseline` promotes silently: no digest, no outbox entry, no email.
+7. `baseline` promotes silently: no digest files, no outbox entry, no email.
+   It still stages the deadline index and `open_deadlines.csv` with the
+   catalog. It evaluates only feeds that are not yet live. Live feeds (baseline
+   complete at the current coverage revision) are skipped and listed in the
+   manifest as `context.skipped_live`, so their new publications are reported
+   by the next `run` instead of being absorbed unemailed. When every feed is
+   live, `baseline` changes nothing and exits 0.
 
 Delivery is at-least-once. If the runner dies after SMTP accepted the message
 but before step 5 is pushed, the next run sends the same bundle again with the
@@ -107,7 +133,9 @@ same Message-ID, which lets most mail clients collapse the duplicate.
 
 `--dry-run` performs no email, commit, push, or durable change. It renders into
 a temporary directory and prints its path (the workflow uploads it as an
-artifact). With a pending delivery it only reports it. `run --no-email`
+artifact). With `--publish` it does not reset or clean `--data-dir`. It reads
+the remote `tracker-data` head into a throwaway snapshot (`git archive`), so
+uncommitted local files in a data checkout survive a dry run. With a pending delivery it only reports it. `run --no-email`
 archives the digest and promotes without an outbox entry. `baseline`,
 `run --no-email`, and `rebaseline-feed` refuse while a delivery is pending.
 
@@ -138,7 +166,11 @@ the initial silent baseline. A run after more than ten days reports the gap.
 **First deployment.** Set the variables and secrets, run "Initialize
 tracker-data" once, then run Weekly tracker with `mode=baseline` until every
 feed's baseline is complete (enrichment hashes at most `TRACKER_MAX_DOCUMENTS`
-documents per run), then let the schedule take over.
+documents per run), then let the schedule take over. Rerunning `baseline` is
+safe: feeds that are already live are skipped, so it never swallows their new
+publications. One limitation remains: a record that first appears on a
+baselining feed during a `baseline` run is absorbed silently even if a skipped
+live feed also lists it.
 
 **Stuck pending delivery** (exit 3 with "still pending"). Read
 `outbox/<id>/attempts.json` on `tracker-data` for the error class. Fix the cause

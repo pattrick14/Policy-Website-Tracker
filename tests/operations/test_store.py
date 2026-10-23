@@ -306,3 +306,66 @@ def test_duplicate_event_ids_in_a_run_are_rejected(store: DataStore) -> None:
     candidate = replace(_candidate(store, RUN_A, _state()), events=(_event(RUN_A),) * 2)
     with pytest.raises(StoreError, match="duplicate event id"):
         store.write_run(candidate)
+
+
+def test_promote_finishes_after_crash_past_catalog_write(
+    store: DataStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A crash after the catalog write but before the manifest is marked is recoverable."""
+
+    candidate = _candidate(store, RUN_A, _state())
+    store.write_candidate(candidate)
+    store.stage_rolling(RUN_A, [("open_deadlines.csv", b"title\n")])
+    real = DataStore._write_schema
+    crashed: list[bool] = []
+
+    def crash_once(self: DataStore) -> None:
+        if not crashed:
+            crashed.append(True)
+            raise KeyboardInterrupt("killed mid-promotion")
+        real(self)
+
+    monkeypatch.setattr(DataStore, "_write_schema", crash_once)
+    with pytest.raises(KeyboardInterrupt):
+        store.promote(candidate)
+    assert store.load_state() == candidate.state  # catalog advanced
+    assert store.load_run(RUN_A)["status"] == "candidate"  # manifest not marked
+    retried = store.load_candidate(RUN_A)
+    new_hash = store.promote(retried)  # no PromotionConflict
+    manifest = store.load_run(RUN_A)
+    assert manifest["status"] == "promoted" and manifest["promoted_state_hash"] == new_hash
+    assert (store.root / "open_deadlines.csv").read_bytes() == b"title\n"
+    assert not store.candidate_dir(RUN_A).exists()
+    # A genuinely different newer state is still refused.
+    other = _candidate(store, RUN_B, _state("other"), base="0" * 64)
+    store.write_candidate(other)
+    with pytest.raises(PromotionConflict):
+        store.promote(other)
+
+
+def test_health_is_published_only_at_promotion(store: DataStore) -> None:
+    candidate = _candidate(store, RUN_A, _state())
+    store.write_candidate(candidate)
+    assert not store.health_path.exists()  # staged, not published
+    assert store.load_run(RUN_A)["health"]["feed_a"]["accepted"] is True  # per-run record
+    store.discard_candidate(RUN_A, reason="delivery abandoned", at="2026-10-27T00:00:00Z")
+    assert not store.health_path.exists()  # abandoned: health never described it
+
+    second = _candidate(store, RUN_B, _state())
+    store.write_candidate(second)
+    store.promote(second)
+    health = json.loads(store.health_path.read_text())
+    assert health["run_id"] == RUN_B and health["feeds"]["feed_a"]["run_id"] == RUN_B
+
+
+def test_not_promoted_run_updates_health_immediately(store: DataStore) -> None:
+    failed = m.CandidateState(
+        run_id=RUN_A,
+        base_state_hash=store.state_hash(),
+        state=store.load_state(),
+        events=(),
+        feed_runs=(_feed_run(RUN_A, accepted=False),),
+    )
+    store.write_run(failed, status="not_promoted")
+    health = json.loads(store.health_path.read_text())
+    assert health["feeds"]["feed_a"]["accepted"] is False
