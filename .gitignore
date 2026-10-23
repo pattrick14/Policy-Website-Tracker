@@ -1,0 +1,22 @@
+.playwright-cli/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.coverage
+htmlcov/
+.env
+.env.*
+!*.env.example
+data/
+artifacts/
+
+# Scratch files produced by the initial Playwright exploration.
+document.title
+([{]text

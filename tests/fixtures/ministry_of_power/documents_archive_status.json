@@ -1,0 +1,46 @@
+{
+  "posts": [
+    {
+      "ID": 21175,
+      "post_date": "2025-11-10 16:05:35",
+      "post_modified": "2025-11-10 16:05:36",
+      "post_status": "archive",
+      "post_title": "Example principal act (Archive)",
+      "documents_category": [
+        {
+          "term_id": 136,
+          "slug": "acts-and-policy",
+          "parent": 0
+        },
+        {
+          "term_id": 137,
+          "slug": "general_acts",
+          "parent": 136
+        }
+      ]
+    },
+    {
+      "ID": 13458,
+      "post_date": "2025-06-28 12:33:38",
+      "post_modified": "2025-11-10 16:08:02",
+      "post_status": "archive",
+      "post_title": "Example other important documents",
+      "documents_category": [
+        {
+          "term_id": 136,
+          "slug": "acts-and-policy",
+          "parent": 0
+        },
+        {
+          "term_id": 137,
+          "slug": "general_acts",
+          "parent": 136
+        }
+      ]
+    }
+  ],
+  "total_items": 2,
+  "total_pages": 1,
+  "current_page": 1,
+  "_fixture_note": "document_category=acts-and-policy&limit=50&page=1&post_status=archive"
+}

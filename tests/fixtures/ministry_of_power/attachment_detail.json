@@ -1,0 +1,22 @@
+{
+  "posts": {
+    "ID": 6001,
+    "post_date": "2025-06-28 14:22:01",
+    "post_modified": "2025-11-10 15:22:10",
+    "post_title": "Example national policy",
+    "post_type": "central_documents",
+    "acf_data": {
+      "title": "Example national policy",
+      "file_date": "12/02/2005",
+      "pdf_type": "Single Bilingual",
+      "pdf_both": {
+        "ID": 6101,
+        "filename": "example-policy.pdf",
+        "filesize": 2990492,
+        "url": "https://powermin.gov.in/static/uploads/example-policy.pdf",
+        "modified": "2025-06-28 08:51:40",
+        "mime_type": "application/pdf"
+      }
+    }
+  }
+}

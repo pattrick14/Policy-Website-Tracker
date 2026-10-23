@@ -1,0 +1,34 @@
+{
+  "posts": [
+    {
+      "ID": 10177,
+      "post_date": "2025-06-21 10:44:49",
+      "post_modified": "2025-06-29 16:34:15",
+      "post_status": "archive",
+      "post_title": "Example archived bulletin item 1",
+      "menu_order": 647,
+      "acf_data": {
+        "type": "PDF",
+        "file": [
+          8800
+        ]
+      }
+    },
+    {
+      "ID": 17222,
+      "post_date": "2025-07-03 17:16:14",
+      "post_modified": "2025-08-02 05:34:31",
+      "post_status": "archive",
+      "post_title": "Example archived bulletin item 2",
+      "menu_order": 8,
+      "acf_data": {
+        "type": "PDF",
+        "file": [
+          8801
+        ]
+      }
+    }
+  ],
+  "total_items": 637,
+  "_fixture_note": "Excerpt: 2 of 637 posts from post-page/whats_new?post_status=archive; live body returned all 637 with no pagination fields"
+}

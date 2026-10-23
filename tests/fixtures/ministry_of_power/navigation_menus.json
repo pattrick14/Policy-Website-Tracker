@@ -1,0 +1,712 @@
+{
+  "website-menu": [
+    {
+      "ID": 7443,
+      "title": "Ministry",
+      "url": "/ministry",
+      "menu_item_parent": "0",
+      "children": [
+        {
+          "ID": 7442,
+          "title": "About Us",
+          "url": "/ministry",
+          "menu_item_parent": "7443"
+        },
+        {
+          "ID": 2828,
+          "title": "Our Team",
+          "url": "/ministry/our-team",
+          "menu_item_parent": "7443"
+        },
+        {
+          "ID": 4160,
+          "title": "Our Divisions",
+          "url": "/ministry/our-division",
+          "menu_item_parent": "7443"
+        },
+        {
+          "ID": 7364,
+          "title": "Our Organisations",
+          "url": "/ministry/our-organisation",
+          "menu_item_parent": "7443"
+        },
+        {
+          "ID": 8023,
+          "title": "Our Performance",
+          "url": "/ministry/our-performance",
+          "menu_item_parent": "7443"
+        },
+        {
+          "ID": 8024,
+          "title": "Directory",
+          "url": "/ministry/directory",
+          "menu_item_parent": "7443"
+        }
+      ]
+    },
+    {
+      "ID": 2830,
+      "title": "Offerings",
+      "url": "/offerings",
+      "menu_item_parent": "0",
+      "children": [
+        {
+          "ID": 2831,
+          "title": "Schemes and Services",
+          "url": "/offerings",
+          "menu_item_parent": "2830"
+        },
+        {
+          "ID": 7033,
+          "title": "Vacancies",
+          "url": "/offerings/vacancies",
+          "menu_item_parent": "2830"
+        },
+        {
+          "ID": 2871,
+          "title": "Tenders",
+          "url": "/offerings/tenders",
+          "menu_item_parent": "2830"
+        }
+      ]
+    },
+    {
+      "ID": 3624,
+      "title": "Documents",
+      "url": "/documents",
+      "menu_item_parent": "0",
+      "children": [
+        {
+          "ID": 3625,
+          "title": "Reports",
+          "url": "/documents",
+          "menu_item_parent": "3624"
+        },
+        {
+          "ID": 10151,
+          "title": "Acts and Policies",
+          "url": "/documents/acts-and-policies",
+          "menu_item_parent": "3624"
+        },
+        {
+          "ID": 3627,
+          "title": "Orders and Notices",
+          "url": "/documents/orders-and-notices",
+          "menu_item_parent": "3624"
+        },
+        {
+          "ID": 8233,
+          "title": "Press Release",
+          "url": "/documents/press-release",
+          "menu_item_parent": "3624"
+        }
+      ]
+    },
+    {
+      "ID": 5760,
+      "title": "Media",
+      "url": "/media",
+      "menu_item_parent": "0",
+      "children": [
+        {
+          "ID": 3630,
+          "title": "Photos",
+          "url": "/media",
+          "menu_item_parent": "5760"
+        },
+        {
+          "ID": 7371,
+          "title": "Videos",
+          "url": "/media/videos",
+          "menu_item_parent": "5760"
+        }
+      ]
+    },
+    {
+      "ID": 8112,
+      "title": "Connect",
+      "url": "/connect",
+      "menu_item_parent": "0",
+      "children": [
+        {
+          "ID": 8113,
+          "title": "Contact Us",
+          "url": "/connect",
+          "menu_item_parent": "8112"
+        },
+        {
+          "ID": 8114,
+          "title": "Directory",
+          "url": "/connect/directory",
+          "menu_item_parent": "8112"
+        },
+        {
+          "ID": 8115,
+          "title": "RTI",
+          "url": "/connect/rti",
+          "menu_item_parent": "8112",
+          "children": [
+            {
+              "ID": 8116,
+              "title": "RTI Documents",
+              "url": "/connect/Rti/details",
+              "menu_item_parent": "8115"
+            }
+          ]
+        },
+        {
+          "ID": 8118,
+          "title": "Grievance Redressal",
+          "url": "/connect/grievance-redressal",
+          "menu_item_parent": "8112"
+        },
+        {
+          "ID": 8119,
+          "title": "Citizen Engagement",
+          "url": "/connect/citizen-engagement",
+          "menu_item_parent": "8112"
+        },
+        {
+          "ID": 8120,
+          "title": "Parliament Questions",
+          "url": "/connect/parliament-questions",
+          "menu_item_parent": "8112"
+        }
+      ]
+    },
+    {
+      "ID": 7445,
+      "title": "Website Policies",
+      "url": "/policies",
+      "menu_item_parent": "0",
+      "children": [
+        {
+          "ID": 7446,
+          "title": "Terms of Use",
+          "url": "/policies",
+          "menu_item_parent": "7445"
+        },
+        {
+          "ID": 7447,
+          "title": "Privacy Policy",
+          "url": "/policies/privacy-policy",
+          "menu_item_parent": "7445"
+        },
+        {
+          "ID": 7448,
+          "title": "Hyperlink Policy",
+          "url": "/policies/hyperlinking-policy",
+          "menu_item_parent": "7445"
+        }
+      ]
+    },
+    {
+      "ID": 7034,
+      "title": "Archives",
+      "url": "/archives",
+      "menu_item_parent": "0",
+      "children": [
+        {
+          "ID": 19502,
+          "title": "Tenders",
+          "url": "/archives/tenders",
+          "menu_item_parent": "7034"
+        },
+        {
+          "ID": 19503,
+          "title": "Vacancies",
+          "url": "/archives/vacancies",
+          "menu_item_parent": "7034"
+        },
+        {
+          "ID": 19504,
+          "title": "Reports",
+          "url": "/archives/reports",
+          "menu_item_parent": "7034"
+        },
+        {
+          "ID": 9192,
+          "title": "Orders and Notices",
+          "url": "/archives/orders-and-notices",
+          "menu_item_parent": "7034"
+        },
+        {
+          "ID": 8230,
+          "title": "Schemes and Services",
+          "url": "/archives/schemes-and-services",
+          "menu_item_parent": "7034"
+        },
+        {
+          "ID": 9195,
+          "title": "Acts and Policies",
+          "url": "/documents/acts-and-policies",
+          "menu_item_parent": "7034"
+        },
+        {
+          "ID": 9190,
+          "title": "Presentation",
+          "url": "/archives/presentation",
+          "menu_item_parent": "7034"
+        },
+        {
+          "ID": 9193,
+          "title": "Gazettes Notifications",
+          "url": "/archives/gazettes-notifications",
+          "menu_item_parent": "7034"
+        },
+        {
+          "ID": 9196,
+          "title": "Publications",
+          "url": "/archives/publications",
+          "menu_item_parent": "7034"
+        }
+      ]
+    }
+  ],
+  "global-information-architecture": [
+    {
+      "ID": 7444,
+      "title": "Ministry",
+      "url": "/ministry",
+      "menu_item_parent": "0",
+      "children": [
+        {
+          "ID": 7441,
+          "title": "About Us",
+          "url": "/ministry",
+          "menu_item_parent": "7444"
+        },
+        {
+          "ID": 5552,
+          "title": "Our Team",
+          "url": "/ministry/our-team",
+          "menu_item_parent": "7444"
+        },
+        {
+          "ID": 5553,
+          "title": "Our Division",
+          "url": "/ministry/our-division",
+          "menu_item_parent": "7444"
+        },
+        {
+          "ID": 7365,
+          "title": "Our Organisation",
+          "url": "/ministry/our-organisation",
+          "menu_item_parent": "7444"
+        },
+        {
+          "ID": 5555,
+          "title": "Our Performance",
+          "url": "/ministry/our-performance",
+          "menu_item_parent": "7444"
+        },
+        {
+          "ID": 5556,
+          "title": "Our Departments",
+          "url": "/ministry/our-departments",
+          "menu_item_parent": "7444"
+        },
+        {
+          "ID": 8017,
+          "title": "Directory",
+          "url": "/ministry/directory",
+          "menu_item_parent": "7444"
+        }
+      ]
+    },
+    {
+      "ID": 7464,
+      "title": "Offerings",
+      "url": "/offerings",
+      "menu_item_parent": "0",
+      "children": [
+        {
+          "ID": 5559,
+          "title": "Schemes and Services",
+          "url": "/offerings",
+          "menu_item_parent": "7464"
+        },
+        {
+          "ID": 7036,
+          "title": "Vacancies",
+          "url": "/offerings/vacancies",
+          "menu_item_parent": "7464"
+        },
+        {
+          "ID": 5561,
+          "title": "Tenders",
+          "url": "/offerings/tenders",
+          "menu_item_parent": "7464"
+        },
+        {
+          "ID": 5562,
+          "title": "Competition and Awards",
+          "url": "/offerings/competition-and-awards",
+          "menu_item_parent": "7464"
+        },
+        {
+          "ID": 5563,
+          "title": "International Collaboration",
+          "url": "/offerings/international-collaboration",
+          "menu_item_parent": "7464"
+        },
+        {
+          "ID": 8091,
+          "title": "Initiative",
+          "url": "/offerings/initiative",
+          "menu_item_parent": "7464"
+        }
+      ]
+    },
+    {
+      "ID": 5565,
+      "title": "Documents",
+      "url": "/documents",
+      "menu_item_parent": "0",
+      "children": [
+        {
+          "ID": 5566,
+          "title": "Reports",
+          "url": "/documents",
+          "menu_item_parent": "5565"
+        },
+        {
+          "ID": 10150,
+          "title": "Acts and Policies",
+          "url": "/documents/acts-and-policies",
+          "menu_item_parent": "5565"
+        },
+        {
+          "ID": 5568,
+          "title": "Orders and Notices",
+          "url": "/documents/orders-and-notices",
+          "menu_item_parent": "5565"
+        },
+        {
+          "ID": 5569,
+          "title": "Publications",
+          "url": "/documents/publications",
+          "menu_item_parent": "5565"
+        },
+        {
+          "ID": 8236,
+          "title": "Press Release",
+          "url": "/documents/press-release",
+          "menu_item_parent": "5565"
+        },
+        {
+          "ID": 8237,
+          "title": "Gazettes Notifications",
+          "url": "/documents/gazettes-notifications",
+          "menu_item_parent": "5565"
+        },
+        {
+          "ID": 8238,
+          "title": "Guidelines",
+          "url": "/documents/guidelines",
+          "menu_item_parent": "5565"
+        },
+        {
+          "ID": 5570,
+          "title": "Related Documents",
+          "url": "/documents/related-documents",
+          "menu_item_parent": "5565"
+        }
+      ]
+    },
+    {
+      "ID": 5576,
+      "title": "Media",
+      "url": "/media",
+      "menu_item_parent": "0",
+      "children": [
+        {
+          "ID": 5577,
+          "title": "Photos",
+          "url": "/media",
+          "menu_item_parent": "5576"
+        },
+        {
+          "ID": 7372,
+          "title": "Videos",
+          "url": "/media/videos",
+          "menu_item_parent": "5576"
+        },
+        {
+          "ID": 5579,
+          "title": "Brochures",
+          "url": "/media/brochures",
+          "menu_item_parent": "5576"
+        },
+        {
+          "ID": 5580,
+          "title": "Presentations",
+          "url": "/media/presentations",
+          "menu_item_parent": "5576"
+        }
+      ]
+    },
+    {
+      "ID": 8121,
+      "title": "Connect",
+      "url": "/connect",
+      "menu_item_parent": "0",
+      "children": [
+        {
+          "ID": 8122,
+          "title": "Contact Us",
+          "url": "/connect",
+          "menu_item_parent": "8121"
+        },
+        {
+          "ID": 8123,
+          "title": "Directory",
+          "url": "/connect/directory",
+          "menu_item_parent": "8121"
+        },
+        {
+          "ID": 8124,
+          "title": "Rti",
+          "url": "/connect/rti",
+          "menu_item_parent": "8121"
+        },
+        {
+          "ID": 8125,
+          "title": "Grievance Redressal",
+          "url": "/connect/grievance-redressal",
+          "menu_item_parent": "8121"
+        },
+        {
+          "ID": 8126,
+          "title": "Citizen Engagement",
+          "url": "/connect/citizen-engagement",
+          "menu_item_parent": "8121"
+        },
+        {
+          "ID": 8127,
+          "title": "Parliament Questions",
+          "url": "/connect/parliament-questions",
+          "menu_item_parent": "8121"
+        },
+        {
+          "ID": 8128,
+          "title": "Visitors Pass",
+          "url": "/connect/visitors-pass",
+          "menu_item_parent": "8121"
+        }
+      ]
+    },
+    {
+      "ID": 5589,
+      "title": "Website Policies",
+      "url": "/policies",
+      "menu_item_parent": "0",
+      "children": [
+        {
+          "ID": 5590,
+          "title": "Terms of Use",
+          "url": "/policies",
+          "menu_item_parent": "5589"
+        },
+        {
+          "ID": 7450,
+          "title": "Privacy Policy",
+          "url": "/policies/privacy-policy",
+          "menu_item_parent": "5589"
+        },
+        {
+          "ID": 5592,
+          "title": "Hyperlinking Policy",
+          "url": "/policies/hyperlinking-policy",
+          "menu_item_parent": "5589"
+        },
+        {
+          "ID": 5593,
+          "title": "Copyright Policy",
+          "url": "/policies/copyright-policy",
+          "menu_item_parent": "5589"
+        },
+        {
+          "ID": 5594,
+          "title": "Cookie Policy",
+          "url": "/policies/cookie-policy",
+          "menu_item_parent": "5589"
+        },
+        {
+          "ID": 5595,
+          "title": "Bhashini Policy",
+          "url": "/policies/bhashini-policy",
+          "menu_item_parent": "5589"
+        }
+      ]
+    },
+    {
+      "ID": 19475,
+      "title": "Archives",
+      "url": "/archives?page=tenders",
+      "menu_item_parent": "0",
+      "children": [
+        {
+          "ID": 19476,
+          "title": "Tenders",
+          "url": "/archives/tenders",
+          "menu_item_parent": "19475"
+        },
+        {
+          "ID": 19477,
+          "title": "Photos",
+          "url": "/archives/photos",
+          "menu_item_parent": "19475"
+        },
+        {
+          "ID": 19478,
+          "title": "Vacancies",
+          "url": "/archives/vacancies",
+          "menu_item_parent": "19475"
+        },
+        {
+          "ID": 19479,
+          "title": "Reports",
+          "url": "/archives/reports",
+          "menu_item_parent": "19475"
+        },
+        {
+          "ID": 19480,
+          "title": "Orders and Notices",
+          "url": "/documents/orders",
+          "menu_item_parent": "19475"
+        },
+        {
+          "ID": 19481,
+          "title": "Press Release",
+          "url": "/documents/press-release",
+          "menu_item_parent": "19475"
+        },
+        {
+          "ID": 19482,
+          "title": "Presentation",
+          "url": "/media/presentation",
+          "menu_item_parent": "19475"
+        },
+        {
+          "ID": 19492,
+          "title": "Gazettes Notifications",
+          "url": "/archives/gazettes-notifications",
+          "menu_item_parent": "19475"
+        },
+        {
+          "ID": 19491,
+          "title": "Schemes and Services",
+          "url": "/offerings",
+          "menu_item_parent": "19475"
+        },
+        {
+          "ID": 19484,
+          "title": "Our Division",
+          "url": "/archives/our-division",
+          "menu_item_parent": "19475"
+        },
+        {
+          "ID": 19485,
+          "title": "Videos",
+          "url": "/media/videos",
+          "menu_item_parent": "19475"
+        },
+        {
+          "ID": 19486,
+          "title": "Acts and Policies",
+          "url": "/documents/acts-and-policies",
+          "menu_item_parent": "19475"
+        },
+        {
+          "ID": 19488,
+          "title": "Publications",
+          "url": "/documents/publications",
+          "menu_item_parent": "19475"
+        },
+        {
+          "ID": 19489,
+          "title": "Guidelines",
+          "url": "/documents/guidelines",
+          "menu_item_parent": "19475"
+        },
+        {
+          "ID": 19490,
+          "title": "Brochures",
+          "url": "/archives/brochures",
+          "menu_item_parent": "19475"
+        },
+        {
+          "ID": 21217,
+          "title": "Initiatives",
+          "url": "/archives/initiatives",
+          "menu_item_parent": "19475"
+        }
+      ]
+    }
+  ],
+  "footer-menu": [
+    {
+      "ID": 3094,
+      "title": "Archives",
+      "url": "/archives?page=tenders",
+      "menu_item_parent": "0"
+    },
+    {
+      "ID": 3095,
+      "title": "Website Policies",
+      "url": "/policies",
+      "menu_item_parent": "0",
+      "children": [
+        {
+          "ID": 3620,
+          "title": "Terms of Use",
+          "url": "/WebPolicy",
+          "menu_item_parent": "3095"
+        },
+        {
+          "ID": 3621,
+          "title": "Privacy policy",
+          "url": "/Privacypolicy",
+          "menu_item_parent": "3095"
+        },
+        {
+          "ID": 3622,
+          "title": "Hyperlink policy",
+          "url": "/HyperLinkingpolicy",
+          "menu_item_parent": "3095"
+        },
+        {
+          "ID": 3623,
+          "title": "Copyright policy",
+          "url": "/Copyrightpolicy",
+          "menu_item_parent": "3095"
+        }
+      ]
+    },
+    {
+      "ID": 3096,
+      "title": "Related Links",
+      "url": "/RelatedLinks",
+      "menu_item_parent": "0"
+    },
+    {
+      "ID": 6410,
+      "title": "Sitemap",
+      "url": "/sitemap",
+      "menu_item_parent": "0"
+    },
+    {
+      "ID": 6411,
+      "title": "Help",
+      "url": "/help",
+      "menu_item_parent": "0"
+    },
+    {
+      "ID": 19215,
+      "title": "Contact Us",
+      "url": "/connect",
+      "menu_item_parent": "0"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+[
+  {
+    "id": 3467,
+    "date": "2024-02-04T19:45:19",
+    "modified": "2025-10-14T13:01:48",
+    "slug": "public-consultation",
+    "status": "publish",
+    "type": "page",
+    "acf": {
+      "public_consultation_banner_text": "Citizen Engagement",
+      "public_consultation_left_side_tab_text": "Citizen Engagement",
+      "public_consultation_title": "Citizen Charter",
+      "public_consultation_repeat": [
+        {
+          "title": "",
+          "url_or_pdf": [
+            {
+              "acf_fc_layout": "pdf",
+              "file": [12224]
+            }
+          ]
+        }
+      ],
+      "public_consultation_email": ""
+    }
+  }
+]

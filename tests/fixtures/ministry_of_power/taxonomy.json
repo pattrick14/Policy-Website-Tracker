@@ -1,0 +1,12 @@
+{
+  "documents_category": [
+    {"term_id": 136, "name": "Acts and Policy", "slug": "acts-and-policy", "parent": 0, "count": 7},
+    {"term_id": 137, "name": "General", "slug": "general_acts", "parent": 136, "count": 6},
+    {"term_id": 107, "name": "Report", "slug": "reports", "parent": 0, "count": 9},
+    {"term_id": 47, "name": "General", "slug": "general-report", "parent": 107, "count": 7},
+    {"term_id": 140, "name": "Orders and Notices", "slug": "orders-and-notices", "parent": 0, "count": 4},
+    {"term_id": 146, "name": "Gazette Notifications", "slug": "gazette-notifications", "parent": 0, "count": 0},
+    {"term_id": 147, "name": "Guidelines", "slug": "guidelines", "parent": 0, "count": 0},
+    {"term_id": 142, "name": "Publications", "slug": "publications", "parent": 0, "count": 0}
+  ]
+}

@@ -1,0 +1,1464 @@
+# Step 1 research inventory. Preliminary contracts block the completion gate.
+schema_version: 1
+defaults:
+  timezone: Asia/Kolkata
+  request_rate_per_host_per_second: 1
+  request_timeout_seconds: 30
+  max_redirects: 5
+  max_document_bytes: 104857600
+  language_policy: english_and_bilingual
+
+contract_templates:
+  coal_direct_table: &coal_direct_table
+    discovery_method: sitemap
+    kind: authoritative_collection
+    decision: track
+    enumeration: {method: single HTML attachment table, termination: end of table}
+    identity: {native_ids: [attachment href], fallback: row provenance plus source-scoped canonical URL}
+    date_semantics: {displayed: source row date or period label, first_seen: tracker discovery time}
+    expected_mime_types: [text/html, application/pdf]
+    language_behavior: Preserve English listing metadata; linked files may be English, Hindi, bilingual, scanned, or unreadable.
+    refresh_policy: {weekly: full table, historical: full enumeration weekly}
+    completeness:
+      removal_authority: true
+      failure_indicators: [missing page heading, missing attachment table, unexpected row-count collapse, block page]
+
+sites:
+  - id: ministry_of_power
+    name: Ministry of Power
+    base_url: https://www.powermin.gov.in/
+    allowed_hosts:
+      - www.powermin.gov.in
+      - powermin.gov.in
+    required_feed_ids: [mop_whats_new, mop_whats_new_archive, mop_document_taxonomy, mop_documents]
+    coverage_decisions:
+      - scope: Selected document collections (Documents menu and taxonomy roots reports, acts-and-policy, orders-and-notices, gazette-notifications, guidelines, publications; published status)
+        decision: track
+        reason: Approved Ministry of Power publication families (PROJECT_PLAN section 1); enumerated by feed mop_documents and validated by mop_document_taxonomy.
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/custom/v1/menus/global-information-architecture
+          - https://www.powermin.gov.in/cms/wp-json/taxonomy/documents_category
+          - https://www.powermin.gov.in/cms/wp-json/document/documents?document_category=reports&limit=50&page=1
+        coverage_limit: Default enumeration returns only post_status=publish parents; archived parents need the separate archive-status decision below. Gazette Notifications, Guidelines, and Publications are currently empty (count 0).
+        refresh_policy: {weekly: fully enumerate each root slug, historical: quarterly full parent rescan}
+        fixtures:
+          - tests/fixtures/ministry_of_power/taxonomy_full.json
+          - tests/fixtures/ministry_of_power/navigation_menus.json
+          - tests/fixtures/ministry_of_power/documents_page.json
+          - tests/fixtures/ministry_of_power/documents_after_end.json
+        last_verified: '2026-10-22'
+      - scope: What's New bulletin (/whats-new route; post-page/whats_new published posts)
+        decision: track
+        reason: Approved cross-site rolling bulletin; feed mop_whats_new. Captures press releases, Parliament material, and other untracked-section items that are surfaced here.
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/post-page/whats_new
+        coverage_limit: Rolling feed of published posts only (26 at verification); never removal authority. Posts move to archive status and leave this response.
+        refresh_policy: {weekly: full response, historical: not authoritative}
+        fixtures:
+          - tests/fixtures/ministry_of_power/whats_new.json
+          - tests/fixtures/ministry_of_power/frontend_routes.json
+        last_verified: '2026-10-22'
+      - scope: What's New archive (post-page/whats_new?post_status=archive; Archives route)
+        decision: track
+        reason: Hidden publication path found in the frontend bundle; feed mop_whats_new_archive. It holds 637 archived bulletin posts that the rolling feed never exposes and that form part of the available history (D-001, D-006).
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/post-page/whats_new?post_status=archive
+          - https://www.powermin.gov.in/cms/wp-json/post-page/whats_new?post_status=archive&limit=5&page=2
+          - https://www.powermin.gov.in/cms/wp-json/count-posts/archive
+        coverage_limit: Rotating archive without removal authority. Enumerated as one unparameterized response checked against total_items (limit/page give a paginated fallback). Post dates are CMS-migration artifacts and never publication dates.
+        refresh_policy: {weekly: full single response, historical: silent baseline on first complete fetch}
+        fixtures:
+          - tests/fixtures/ministry_of_power/whats_new_archive.json
+          - tests/fixtures/ministry_of_power/whats_new_archive_page.json
+          - tests/fixtures/ministry_of_power/archive_counts.json
+        last_verified: '2026-10-22'
+      - scope: Archived document parents (Archives menu Reports, Orders and Notices, Acts and Policies, Gazettes Notifications, Publications; documents API with post_status=archive)
+        decision: track
+        reason: Archived parents of selected collections are excluded from the default enumeration and from taxonomy counts; covered by the archive-status pass of feed mop_documents. acts-and-policy currently has 2 archived parents, including an archived Electricity Act version.
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/document/documents?document_category=acts-and-policy&limit=1&page=2&post_status=archive
+          - https://www.powermin.gov.in/cms/wp-json/document/documents?document_category=acts-and-policy&limit=1&page=3&post_status=archive
+          - https://www.powermin.gov.in/cms/wp-json/count-posts/archive
+          - https://www.powermin.gov.in/cms/wp-json/custom/v1/menus/website-menu
+        coverage_limit: Archive pass paginates like the published pass (total_pages; following page empty). A move between publish and archive is a status change, not a removal. Other selected roots currently return 0 archived parents.
+        refresh_policy: {weekly: archive pass for every root slug, historical: quarterly full rescan of both passes}
+        fixtures:
+          - tests/fixtures/ministry_of_power/documents_archive_status.json
+          - tests/fixtures/ministry_of_power/documents_archive_page.json
+          - tests/fixtures/ministry_of_power/documents_archive_after_end.json
+          - tests/fixtures/ministry_of_power/archive_counts.json
+        last_verified: '2026-10-22'
+      - scope: Child taxonomy terms of selected roots (general_acts, general-report, general_orders, general_gazettes, general_guidelines, general_publications)
+        decision: indirect
+        reason: Every observed child-term post also carries its root term, so root-slug enumeration returns it (reports 9 = general-report 7 + two Parliament-question children). Querying a child slug directly returns zero items.
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/taxonomy/documents_category
+          - https://www.powermin.gov.in/cms/wp-json/document/documents?document_category=reports&limit=50&page=1
+          - https://www.powermin.gov.in/cms/wp-json/document/documents?document_category=general-report&limit=50&page=1
+        coverage_limit: A post tagged only with a child term would be missed and the API offers no child-slug fallback. The mop_documents child-term reconciliation failure indicator flags when root-enumerated posts carrying a child term fall below that child's taxonomy count.
+        refresh_policy: {weekly: compare child term counts with root-enumerated posts, historical: not applicable}
+        fixtures:
+          - tests/fixtures/ministry_of_power/taxonomy_full.json
+          - tests/fixtures/ministry_of_power/documents_root_child_terms.json
+          - tests/fixtures/ministry_of_power/documents_child_slug_empty.json
+        last_verified: '2026-10-22'
+      - scope: Press Release taxonomy root and child (press-release, general_press_release; /documents/press-release)
+        decision: exclude
+        reason: Outside the approved publication families; excluded as an independent feed by user decision D-013.
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/document/documents?document_category=press-release&limit=3&page=1
+          - https://www.powermin.gov.in/cms/wp-json/taxonomy/documents_category
+        coverage_limit: No independent crawl of the 51 published (and 1 archived) press-release posts; What's New appearances are still captured.
+        refresh_policy: {weekly: taxonomy validation only, historical: none}
+        fixtures:
+          - tests/fixtures/ministry_of_power/taxonomy_full.json
+          - tests/fixtures/ministry_of_power/archive_counts.json
+        last_verified: '2026-10-22'
+      - scope: Parliament Question terms and page (lok-sabha- and rajya-sabha-parliament-questions-and-answer children of reports; /connect/parliament-questions)
+        decision: exclude
+        reason: Outside the approved publication families; excluded as an independent feed by user decision D-013.
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/taxonomy/documents_category
+          - https://www.powermin.gov.in/cms/wp-json/custom/v1/menus/website-menu
+        coverage_limit: No independent feed; What's New appearances are still captured. Both current posts are also tagged reports, so mop_documents still captures them as Reports items under the capture-every-item rule.
+        refresh_policy: {weekly: none beyond reports enumeration and taxonomy validation, historical: none}
+        fixtures:
+          - tests/fixtures/ministry_of_power/documents_root_child_terms.json
+          - tests/fixtures/ministry_of_power/navigation_menus.json
+        last_verified: '2026-10-22'
+      - scope: Related Documents navigation entry (/documents/related-documents)
+        decision: exclude
+        reason: Menu entry with no backing taxonomy term; the documents API returns an empty result for the slug.
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/custom/v1/menus/global-information-architecture
+          - https://www.powermin.gov.in/cms/wp-json/document/documents?document_category=related-documents&limit=5&page=1
+        coverage_limit: If a related-documents term appears in the taxonomy it must be reviewed before it is tracked.
+        refresh_policy: {weekly: taxonomy validation flags new terms, historical: none}
+        fixtures:
+          - tests/fixtures/ministry_of_power/navigation_menus.json
+          - tests/fixtures/ministry_of_power/taxonomy_full.json
+        last_verified: '2026-10-22'
+      - scope: Attachment records (central_documents post type; post-page/post?id=)
+        decision: indirect
+        reason: File records are reached through attachment IDs on tracked parents and What's New posts.
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/post-page/post?id=13695
+          - https://www.powermin.gov.in/cms/wp-json/custom/api/search?s=electricity%20act
+        coverage_limit: Attachment records not linked from any tracked parent or bulletin post are not enumerated; search exposes such records but is not a complete index.
+        refresh_policy: {weekly: fetch newly referenced IDs and conditional checks, historical: quarterly validator recheck}
+        fixtures:
+          - tests/fixtures/ministry_of_power/attachment_detail.json
+          - tests/fixtures/ministry_of_power/search_results.json
+        last_verified: '2026-10-22'
+      - scope: Site search (/search, /aisearch, custom/api/search)
+        decision: exclude
+        reason: Query-driven mixed-type results; used as a research cross-check for hidden publication paths, not as a feed.
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/custom/api/search?s=electricity%20act
+        coverage_limit: Not an enumeration source. Result links point at the CMS backend host cms-powermin.digifootprint.gov.in, which is outside allowed_hosts.
+        refresh_policy: {weekly: none, historical: optional manual diagnostic during inventory refresh}
+        fixtures:
+          - tests/fixtures/ministry_of_power/search_results.json
+        last_verified: '2026-10-22'
+      - scope: Ministry organisation pages (About Us, Our Team, Our Divisions, Our Departments, Our Performance, Directory; Archives Our Division)
+        decision: exclude
+        reason: Generic organisational and staff-directory content (PROJECT_PLAN section 1).
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/custom/v1/menus/global-information-architecture
+        coverage_limit: No independent crawl; What's New appearances remain captured.
+        refresh_policy: {weekly: none, historical: menu review at inventory refresh}
+        fixtures:
+          - tests/fixtures/ministry_of_power/navigation_menus.json
+        last_verified: '2026-10-22'
+      - scope: Attached organisations, PSUs, Related Links, Important Links, and other outbound websites (Our Organisations, /RelatedLinks, /important-links)
+        decision: exclude
+        reason: External to the three-site boundary; outbound links only in v1.
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/custom/v1/menus/website-menu
+          - https://www.powermin.gov.in/cms/wp-json/custom/v1/menus/footer-menu
+        coverage_limit: Outbound links may be recorded when they appear on tracked items; external sites are not crawled.
+        refresh_policy: {weekly: none, historical: menu review at inventory refresh}
+        fixtures:
+          - tests/fixtures/ministry_of_power/navigation_menus.json
+        last_verified: '2026-10-22'
+      - scope: Offerings programme pages (Schemes and Services, Competition and Awards, International Collaboration, Initiative; Archives Schemes and Initiatives)
+        decision: exclude
+        reason: Programme and scheme descriptions are not among the approved Ministry of Power publication families.
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/custom/v1/menus/global-information-architecture
+        coverage_limit: No independent crawl; What's New appearances remain captured.
+        refresh_policy: {weekly: none, historical: menu review at inventory refresh}
+        fixtures:
+          - tests/fixtures/ministry_of_power/navigation_menus.json
+          - tests/fixtures/ministry_of_power/frontend_routes.json
+        last_verified: '2026-10-22'
+      - scope: Tenders and vacancies (Offerings Tenders and Vacancies; Archives Tenders and Vacancies)
+        decision: exclude
+        reason: Jobs and tenders do not become independent feeds (PROJECT_PLAN section 1).
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/custom/v1/menus/website-menu
+          - https://www.powermin.gov.in/cms/wp-json/count-posts/archive
+        coverage_limit: No independent crawl of 110 archived tenders or 127 archived vacancies; What's New appearances remain captured.
+        refresh_policy: {weekly: none, historical: none}
+        fixtures:
+          - tests/fixtures/ministry_of_power/navigation_menus.json
+          - tests/fixtures/ministry_of_power/archive_counts.json
+        last_verified: '2026-10-22'
+      - scope: Media (Photos, Videos, Brochures, Presentations, gallery and presentation detail routes; Archives Photos, Videos, Brochures, Presentation)
+        decision: exclude
+        reason: Galleries and promotional media are excluded generic content (PROJECT_PLAN section 1).
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/custom/v1/menus/global-information-architecture
+        coverage_limit: No independent crawl; What's New appearances remain captured.
+        refresh_policy: {weekly: none, historical: none}
+        fixtures:
+          - tests/fixtures/ministry_of_power/navigation_menus.json
+          - tests/fixtures/ministry_of_power/frontend_routes.json
+        last_verified: '2026-10-22'
+      - scope: Connect pages (Contact Us, Directory, RTI and RTI Documents, Grievance Redressal, Citizen Engagement, Visitors Pass)
+        decision: exclude
+        reason: Contact, directory, RTI, grievance, and engagement-service content is generic administrative material. Citizen Engagement is backed by the public-consultation page, which holds only the bilingual Citizen's/Client's Charter.
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/custom/v1/menus/global-information-architecture
+          - https://www.powermin.gov.in/cms/wp-json/wp/v2/pages?slug=public-consultation&acf_format=standard
+          - https://www.powermin.gov.in/cms/wp-json/post-page/post?id=12224
+        coverage_limit: Consultations are expected through What's New and selected collections. If the public-consultation page later lists consultation documents, they are not collected until a feed is added; the weekly growth check makes that visible.
+        refresh_policy: {weekly: warn when the public-consultation page's public_consultation_repeat list has more than its one charter entry, historical: menu review at inventory refresh}
+        fixtures:
+          - tests/fixtures/ministry_of_power/navigation_menus.json
+          - tests/fixtures/ministry_of_power/citizen_engagement_page.json
+        last_verified: '2026-10-23'
+      - scope: Website policies and utility routes (Terms, Privacy, Hyperlinking, Copyright, Cookie, Bhashini policies; help, HTML sitemap, feedback, cookies, profile, dashboard, persona, social feed, new-template, search-copy)
+        decision: exclude
+        reason: Site utility, legal, and template pages carry no policy publications.
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/custom/v1/menus/footer-menu
+          - https://www.powermin.gov.in/_next/static/CFzOpdsh5dnqm8hvr-SKu/_buildManifest.js
+        coverage_limit: No crawl. The route list is tied to the current Next.js build ID and must be rechecked after a redeploy.
+        refresh_policy: {weekly: none, historical: route-manifest review at inventory refresh}
+        fixtures:
+          - tests/fixtures/ministry_of_power/frontend_routes.json
+          - tests/fixtures/ministry_of_power/navigation_menus.json
+        last_verified: '2026-10-22'
+      - scope: Homepage widgets and auxiliary APIs (top banner, popup, in-spotlight, infographics, swipe cards, persona cards, social feed, KPI, theme, chatbot)
+        decision: exclude
+        reason: Presentation widgets that duplicate or promote content; publication items are reached through What's New and the selected collections.
+        evidence_urls:
+          - https://www.powermin.gov.in/
+          - https://www.powermin.gov.in/_next/static/chunks/pages/_app-ebc0dce5688a3d29.js
+        coverage_limit: No crawl; in-spotlight items not also in What's New would be missed.
+        refresh_policy: {weekly: none, historical: bundle review at inventory refresh}
+        fixtures:
+          - tests/fixtures/ministry_of_power/home_shell.html
+          - tests/fixtures/ministry_of_power/frontend_routes.json
+        last_verified: '2026-10-22'
+      - scope: Navigation discovery sources (homepage HTML, misconfigured /sitemap.xml, disabled REST route index; substitutes are the custom/v1/menus APIs, the taxonomy API, and the build manifest)
+        decision: exclude
+        reason: The homepage is a client-rendered shell with no links, /sitemap.xml lists only meity.gov.in URLs, and /cms/wp-json/ returns rest_root_disabled. Navigation coverage instead rests on the three menu APIs, the documents taxonomy, and the route manifest.
+        evidence_urls:
+          - https://www.powermin.gov.in/sitemap.xml
+          - https://www.powermin.gov.in/cms/wp-json/
+          - https://www.powermin.gov.in/cms/wp-json/custom/v1/menus/website-menu
+          - https://www.powermin.gov.in/cms/wp-json/custom/v1/menus/global-information-architecture
+          - https://www.powermin.gov.in/cms/wp-json/custom/v1/menus/footer-menu
+        coverage_limit: The menu APIs are not configured feeds, so new menu sections are detected only at inventory refresh unless a menu-diff check is added. Taxonomy validation detects new document terms weekly.
+        refresh_policy: {weekly: taxonomy validation, historical: menu and sitemap recheck at inventory refresh}
+        fixtures:
+          - tests/fixtures/ministry_of_power/sitemap_misconfigured.xml
+          - tests/fixtures/ministry_of_power/home_shell.html
+          - tests/fixtures/ministry_of_power/rest_root_disabled.json
+          - tests/fixtures/ministry_of_power/navigation_menus.json
+        last_verified: '2026-10-22'
+    research_status: complete
+    feeds:
+      - id: mop_whats_new
+        purpose: Cross-site recent-publication bulletin used for discovery and coverage checks.
+        url: https://www.powermin.gov.in/cms/wp-json/post-page/whats_new
+        discovery_method: api
+        kind: rolling
+        decision: track
+        enumeration: {method: API response, termination: response end}
+        identity: {native_ids: [post id], fallback: source-scoped canonical URL}
+        date_semantics: {displayed: publication date, first_seen: tracker discovery time}
+        expected_mime_types: [application/json]
+        language_behavior: English API metadata; linked documents may be English, Hindi, or bilingual.
+        refresh_policy: {weekly: full response, historical: not authoritative}
+        completeness:
+          removal_authority: false
+          failure_indicators: [HTTP block page, non-JSON response, malformed JSON]
+        history: {boundary: current response contained 26 items and exposed total_items=26, boundary_verified: true}
+        evidence_urls: [https://www.powermin.gov.in/cms/wp-json/post-page/whats_new]
+        fixtures:
+          - tests/fixtures/ministry_of_power/whats_new.json
+          - tests/fixtures/ministry_of_power/browser_block.html
+        verified: true
+        last_verified: '2026-10-22'
+      - id: mop_whats_new_archive
+        purpose: Archived What's New bulletin posts that have left the rolling feed; establishes the available bulletin history (D-001, D-006).
+        url: https://www.powermin.gov.in/cms/wp-json/post-page/whats_new?post_status=archive
+        discovery_method: api
+        kind: rotating_archive
+        decision: track
+        enumeration:
+          method: Single unparameterized API response containing every archived post plus total_items; sending limit and page switches the endpoint to a paginated shape with total_pages and current_page, which is a fallback only
+          termination: response end; the posts array length must equal total_items (fallback mode stops when current_page reaches total_pages and the following page is empty)
+        identity: {native_ids: [post id, attachment post id], fallback: source-scoped canonical URL}
+        date_semantics:
+          displayed: none; archived posts carry no acf date field
+          posted: post_date values cluster between 2025-06-21 and 2025-07-03 and are CMS-migration artifacts, never publication dates
+          publication: prefer attachment/document metadata (attachment file_date or parent document date); leave publication date unknown when absent and never substitute post_date
+          modified: API modified timestamp (observed 2025-06-28 to 2025-09-16)
+          first_seen: tracker discovery time
+        expected_mime_types: [application/json]
+        language_behavior: English API metadata; linked documents may be English, Hindi, or bilingual. Preserve English listing metadata regardless of file language.
+        refresh_policy: {weekly: full single response; new archive entries matched by post id to prior mop_whats_new appearances, historical: silent baseline on first complete fetch}
+        completeness:
+          removal_authority: false
+          failure_indicators: [HTTP block page, non-JSON response, malformed JSON, posts length differs from total_items, row-count collapse over 50%]
+          notes: A post moving from mop_whats_new to this archive is an appearance/status change for the same post id, not a new publication. Archive entries disappearing never establish removal.
+        history: {boundary: 637 archived posts in one response (total_items=637; 128 pages at limit=5 in paginated mode with identical ordering), boundary_verified: true}
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/post-page/whats_new?post_status=archive
+          - https://www.powermin.gov.in/cms/wp-json/post-page/whats_new?post_status=archive&limit=5&page=2
+          - https://www.powermin.gov.in/cms/wp-json/count-posts/archive
+        fixtures:
+          - tests/fixtures/ministry_of_power/whats_new_archive.json
+          - tests/fixtures/ministry_of_power/whats_new_archive_page.json
+          - tests/fixtures/ministry_of_power/archive_counts.json
+          - tests/fixtures/ministry_of_power/browser_block.html
+        verified: true
+        last_verified: '2026-10-22'
+      - id: mop_document_taxonomy
+        purpose: Discover and validate Ministry document-category slugs.
+        url: https://www.powermin.gov.in/cms/wp-json/taxonomy/documents_category
+        discovery_method: api
+        kind: discovery
+        decision: indirect
+        enumeration: {method: API response, termination: response end}
+        identity: {native_ids: [term id, slug], fallback: source-scoped slug}
+        date_semantics: {displayed: none, first_seen: tracker discovery time}
+        expected_mime_types: [application/json]
+        language_behavior: Taxonomy metadata is expected in English.
+        refresh_policy: {weekly: validate configured terms, historical: not applicable}
+        completeness:
+          removal_authority: false
+          failure_indicators: [HTTP block page, non-JSON response, malformed JSON]
+        history: {boundary: current taxonomy snapshot contained 16 terms, boundary_verified: true}
+        evidence_urls: [https://www.powermin.gov.in/cms/wp-json/taxonomy/documents_category]
+        fixtures:
+          - tests/fixtures/ministry_of_power/taxonomy.json
+          - tests/fixtures/ministry_of_power/browser_block.html
+        verified: true
+        last_verified: '2026-10-22'
+      - id: mop_documents
+        purpose: Enumerate published and archived document parents and attachments in each selected category.
+        url_template: https://www.powermin.gov.in/cms/wp-json/document/documents?document_category={category}&limit={limit}&page={page}
+        archive_url_template: https://www.powermin.gov.in/cms/wp-json/document/documents?document_category={category}&limit={limit}&page={page}&post_status=archive
+        discovery_method: api
+        kind: authoritative_collection
+        decision: track
+        categories:
+          - reports
+          - acts-and-policy
+          - orders-and-notices
+          - gazette-notifications
+          - guidelines
+          - publications
+        status_passes: [publish, archive]
+        enumeration:
+          method: Two page-parameter passes per taxonomy slug; the published pass uses url_template and the archive pass adds post_status=archive
+          termination: Each pass ends when current_page reaches total_pages; the following page returns an empty posts array; a pass with total_items=0 and total_pages=0 is complete
+        identity: {native_ids: [parent post id, attachment post id], fallback: source-scoped canonical URL}
+        date_semantics: {displayed: publication date, modified: API modified timestamp, status: post_status publish or archive; a move between them is a status change and never removal or publication, first_seen: tracker discovery time}
+        expected_mime_types: [application/json]
+        language_behavior: Preserve English listing metadata for English, Hindi, bilingual, scanned, or unreadable files.
+        refresh_policy: {weekly: fully enumerate both status passes and revisit active/current parents, historical: quarterly full parent rescan of both passes}
+        completeness:
+          removal_authority: true
+          removal_rule: A parent is removed only when absent from both the published and archive passes in two consecutive complete enumerations
+          child_term_reconciliation: Weekly, for every taxonomy term whose parent is a selected root, count root-enumerated posts (both passes) carrying that child term and compare with the taxonomy child count; a lower root-side count means child-only tagged posts are hidden because child-slug queries return zero items
+          failure_indicators: [HTTP block page, non-JSON response, malformed JSON, pagination gap, archive-pass pagination gap, row-count collapse, child-term reconciliation mismatch (root-enumerated posts carrying a child term fewer than that child's taxonomy count)]
+        history:
+          boundary: published reports=9 parents; acts-and-policy=7; orders-and-notices=4; gazette-notifications=0; guidelines=0; publications=0. Archived acts-and-policy=2; all other selected roots=0
+          boundary_verified: true
+        evidence_urls:
+          - https://www.powermin.gov.in/cms/wp-json/taxonomy/documents_category
+          - https://www.powermin.gov.in/cms/wp-json/document/documents?document_category=acts-and-policy&limit=2&page=1
+          - https://www.powermin.gov.in/cms/wp-json/document/documents?document_category=acts-and-policy&limit=1&page=2&post_status=archive
+          - https://www.powermin.gov.in/cms/wp-json/document/documents?document_category=acts-and-policy&limit=1&page=3&post_status=archive
+          - https://www.powermin.gov.in/cms/wp-json/document/documents?document_category=reports&limit=50&page=1
+          - https://www.powermin.gov.in/cms/wp-json/document/documents?document_category=general-report&limit=50&page=1
+          - https://www.powermin.gov.in/cms/wp-json/count-posts/archive
+          - https://www.powermin.gov.in/cms/wp-json/post-page/documents?slug_name=annual-reports-year-wise-2024-2025
+          - https://www.powermin.gov.in/cms/wp-json/post-page/post?id=13695
+        fixtures:
+          - tests/fixtures/ministry_of_power/documents_page.json
+          - tests/fixtures/ministry_of_power/documents_after_end.json
+          - tests/fixtures/ministry_of_power/documents_archive_status.json
+          - tests/fixtures/ministry_of_power/documents_archive_page.json
+          - tests/fixtures/ministry_of_power/documents_archive_after_end.json
+          - tests/fixtures/ministry_of_power/documents_root_child_terms.json
+          - tests/fixtures/ministry_of_power/documents_child_slug_empty.json
+          - tests/fixtures/ministry_of_power/taxonomy_full.json
+          - tests/fixtures/ministry_of_power/archive_counts.json
+          - tests/fixtures/ministry_of_power/old_parent.json
+          - tests/fixtures/ministry_of_power/attachment_detail.json
+          - tests/fixtures/ministry_of_power/browser_block.html
+        verified: true
+        last_verified: '2026-10-22'
+
+  - id: ministry_of_coal
+    name: Ministry of Coal
+    base_url: https://www.coal.nic.in/
+    allowed_hosts:
+      - www.coal.nic.in
+      - coal.nic.in
+      - www.coal.gov.in
+      - coal.gov.in
+    required_feed_ids:
+      - coal_sitemap
+      - coal_whats_new
+      - coal_acts_rules_policies
+      - coal_monthly_statistics
+      - coal_statistical_reports
+      - coal_quarterly_reports
+      - coal_rsr_reports
+      - coal_coal_statistics
+      - coal_sustainability_reports
+      - coal_compensation_orders
+      - coal_termination_orders
+      - coal_national_coal_index
+      - coal_national_lignite_index
+      - coal_cabinet_summaries
+      - coal_standing_linkage_committee
+      - coal_annual_reports
+      - coal_budget_reports
+      - coal_other_reports
+      - coal_action_plans
+      - coal_monthly_cabinet_reports
+      - coal_papers_laid
+      - coal_sop
+      - coal_csr_guidelines
+      - coal_central_schemes
+      - coal_auction_allotment
+      - coal_minutes_of_meetings
+      - coal_production_reviews
+      - coal_operationalisation_reviews
+      - coal_gasification
+    # D-017: coal.nic.in serves an HTTP 200 CAPTCHA page above roughly 0.8 req/s.
+    request_rate_per_host_per_second: 0.25
+    coverage_decisions:
+      # --- Tracked publication families (existing verified feeds) ---
+      - scope: "What's New bulletin (/whats-new and homepage What's New block); feed coal_whats_new"
+        decision: track
+        reason: Broad bulletin of consultations, notices, indices, schemes, Gazette material, and meeting records. It is reached from the homepage block, not from the sitemap tree. Re-check 2026-10-23 found a 41-page pager (?page=0..40, 2042 rows back to 2000), not a single 50-row table.
+        evidence_urls: [https://www.coal.nic.in/whats-new, 'https://www.coal.nic.in/whats-new?page=40', https://www.coal.nic.in/]
+        coverage_limit: Never removal authority. The baseline must enumerate every pager page. Items from untracked sections are captured only while they appear here. Tail rows are malformed at the source (year 0013, a linkless "test" row, empty dates) and are kept verbatim.
+        refresh_policy: {weekly: pager pages from page=0 until a page holds only known hrefs (at least page=0 and page=1), historical: full pager enumeration monthly; never infer removal}
+        fixtures: [tests/fixtures/ministry_of_coal/whats_new.html, tests/fixtures/ministry_of_coal/whats_new_paged.html, tests/fixtures/ministry_of_coal/whats_new_last_page.html]
+        last_verified: '2026-10-23'
+      - scope: Acts & Policies (/acts-rules-policies); feed coal_acts_rules_policies
+        decision: track
+        reason: Authoritative five-table collection of Acts, rules, policies, methodologies, and notifications.
+        evidence_urls: [https://www.coal.nic.in/acts-rules-policies, https://www.coal.nic.in/sitemap]
+        coverage_limit: Enumeration is scoped to the five content tables. Navigation and footer files are ignored.
+        refresh_policy: {weekly: full five-table enumeration, historical: full enumeration weekly}
+        fixtures: [tests/fixtures/ministry_of_coal/acts_rules_policies.html]
+        last_verified: '2026-10-22'
+      - scope: Major Statistics publication tables; feeds coal_monthly_statistics, coal_statistical_reports, coal_quarterly_reports, coal_rsr_reports, coal_coal_statistics
+        decision: track
+        reason: Each sitemap child is a dated attachment table of recurring statistical publications.
+        evidence_urls: [https://www.coal.nic.in/public-information/monthly-statistics-at-glance, https://www.coal.nic.in/public-information/statistical-report, https://www.coal.nic.in/major-statistics/quarterly-booklet, https://www.coal.nic.in/major-statistics/rsr-report, https://www.coal.nic.in/major-statistics/coal-statistics]
+        coverage_limit: Every exposed row is enumerated, including pager pages. Monthly Statistics and Statistical Report each have a two-page pager (?page=0..1) and no archive link (re-checked 2026-10-23). Coal Statistics, Quarterly booklet, and RSR have no pager and no archive link (all re-checked 2026-10-23). Missing months are not manufactured.
+        refresh_policy: {weekly: full table and all pager pages per feed, historical: full enumeration weekly}
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html, tests/fixtures/ministry_of_coal/paged_table_with_archive.html]
+        last_verified: '2026-10-23'
+      - scope: Public Information publication collections; feeds coal_cabinet_summaries, coal_monthly_cabinet_reports, coal_standing_linkage_committee, coal_action_plans, coal_papers_laid, coal_sop
+        decision: track
+        reason: Dated publication tables or lists under the Public Information branch, including the Monthly Reports for Cabinet archive.
+        evidence_urls: [https://www.coal.nic.in/public-information/monthly-summary-cabinets, https://www.coal.nic.in/public-information/monthly-report-cabinet, https://www.coal.nic.in/public-information/standing-linkage-committee1, https://www.coal.nic.in/public-information/action-plan, https://www.coal.nic.in/public-information/paper-laid-table, https://www.coal.nic.in/public-information/sop]
+        coverage_limit: Contracts per feed. The Standing Linkage Committee pager ends at page=1 and it has no archive link. Monthly Summary for Cabinet has an archive (two pages). Monthly Reports for Cabinet has two current pages and a two-page archive. Papers Laid, Action Plan, and SOP have no pager or archive (re-checked 2026-10-23).
+        refresh_policy: {weekly: full enumeration per feed including pager and archive pages, historical: full enumeration weekly}
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html, tests/fixtures/ministry_of_coal/direct_link_list.html, tests/fixtures/ministry_of_coal/archive_table_paged.html]
+        last_verified: '2026-10-23'
+      - scope: Reports branch (annual, budget, and other reports); feeds coal_annual_reports, coal_budget_reports, coal_other_reports
+        decision: track
+        reason: Parent indexes link to nested detail pages whose child attachments evolve over time.
+        evidence_urls: [https://www.coal.nic.in/public-information/reports, https://www.coal.nic.in/public-information/reports/annual-reports, https://www.coal.nic.in/public-information/reports/budget-reports, https://www.coal.nic.in/public-information/reports/other-reports]
+        coverage_limit: Historical children are rescanned quarterly. The Reports hub page itself is a link list only. The three parent indexes have no pager or archive link (re-checked 2026-10-23; detail pages were not re-fetched).
+        refresh_policy: {weekly: parent index and current/prior-year children, historical: quarterly full child rescan}
+        fixtures: [tests/fixtures/ministry_of_coal/nested_report_index.html, tests/fixtures/ministry_of_coal/nested_report_detail.html]
+        last_verified: '2026-10-23'
+      - scope: Nominated Authority orders and indices; feeds coal_compensation_orders, coal_termination_orders, coal_national_coal_index, coal_national_lignite_index
+        decision: track
+        reason: Statutory orders, notices, and monthly index publications.
+        evidence_urls: [https://www.coal.nic.in/nominated-authority/sanction-order-notice, https://www.coal.nic.in/nominated-authority/termination-order, https://www.coal.nic.in/nominated-authority/national-coal-index, https://www.coal.nic.in/nominated-authority/national-lignite]
+        coverage_limit: Termination orders are enumerated from the second table only. Compensation orders have a five-page pager plus a two-page archive. The National Coal Index has a two-page pager plus a one-page archive. Termination orders have a one-row, single-page, undated archive (/nominated-authority/archive-termination-order). National Lignite Index has no pager or archive.
+        refresh_policy: {weekly: full table plus all pager and archive pages per feed, historical: full enumeration weekly}
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html, tests/fixtures/ministry_of_coal/termination_orders.html, tests/fixtures/ministry_of_coal/paged_table_with_archive.html, tests/fixtures/ministry_of_coal/archive_table_paged.html, tests/fixtures/ministry_of_coal/auction_allotment_archive.html]
+        last_verified: '2026-10-23'
+      - scope: Sustainability guidelines/reports, CSR guidelines, and Central Sector Schemes; feeds coal_sustainability_reports, coal_csr_guidelines, coal_central_schemes
+        decision: track
+        reason: Policy guidance tables plus the canonical scheme page.
+        evidence_urls: [https://www.coal.nic.in/sustainable-development-cell/report, https://www.coal.nic.in/CSR/guidelines, https://www.coal.nic.in/central-sector-schemes]
+        coverage_limit: The scheme page is tracked by page fingerprint because it has no attachments. None of the three pages has a pager or archive link (re-checked 2026-10-23).
+        refresh_policy: {weekly: full table or page fingerprint, historical: full enumeration weekly}
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html, tests/fixtures/ministry_of_coal/central_sector_schemes.html]
+        last_verified: '2026-10-23'
+      # --- Tracked feeds added under D-015 (contracts in coal_new_feeds.yaml) ---
+      - scope: Nominated Authority Auction/Allotment (/nominated-authority/auction-allotment pages 0-8 and its archive); feed coal_auction_allotment
+        decision: track
+        reason: D-015. This is the core coal-block auction publication family (tender documents, tranche notices, and qualified-bidder declarations). On 2026-10-23 it held 414 rows across nine pager pages (07/10/2026 back to 19/04/2017) plus a 40-row undated archive.
+        evidence_urls: [https://www.coal.nic.in/nominated-authority/auction-allotment, 'https://www.coal.nic.in/nominated-authority/auction-allotment?page=8', https://www.coal.nic.in/nominated-authority/archive-auction-allotment]
+        coverage_limit: The first table is state-wise statistics, not documents. Offset paging over tied dates repeats some rows across page boundaries (8 repeated hrefs observed) and may skip others, so one pass is not proof of completeness and absence never establishes removal. Archive hrefs need the http://www.coal.nic.in// to https single-slash rewrite.
+        refresh_policy: {weekly: all pager pages plus archive, historical: full enumeration weekly}
+        fixtures: [tests/fixtures/ministry_of_coal/auction_allotment.html, tests/fixtures/ministry_of_coal/auction_allotment_last_page.html, tests/fixtures/ministry_of_coal/auction_allotment_page_overlap.html, tests/fixtures/ministry_of_coal/auction_allotment_archive.html, tests/fixtures/ministry_of_coal/paged_view_out_of_range.html, tests/fixtures/ministry_of_coal/captcha_block.html]
+        last_verified: '2026-10-23'
+      - scope: Meeting minutes (general Minutes of Meetings and its archive, NA Production Reviews, NA Operationalisation Reviews); feeds coal_minutes_of_meetings, coal_production_reviews, coal_operationalisation_reviews
+        decision: track
+        reason: D-015. These are dated minutes tables beyond the Standing Linkage Committee feed. General minutes have 23 current rows (2021-01-29 to 2025-10-07) plus a 93-row, two-page archive (2005-06-02 to 2019-12-13). Production reviews have 25 rows (from 19-10-2022), and operationalisation reviews have 26 rows (from 15-09-2021).
+        evidence_urls: [https://www.coal.nic.in/public-information/minutes-metings, https://www.coal.nic.in/public-information/minutes-metings/archive-minutes-metings, 'https://www.coal.nic.in/public-information/minutes-metings/archive-minutes-metings?page=1', https://www.coal.nic.in/nominated-authority/production-reviews, https://www.coal.nic.in/nominated-authority/operationalisation-reviews]
+        coverage_limit: SLC notices that also appear here remain appearances, not duplicate documents. Upload folders are not publication dates. Archive rows are not in date order. Production and operationalisation review pages have no pager or archive link (confirmed from the saved 2026-10-22 pages).
+        refresh_policy: {weekly: full table per feed plus both minutes-archive pages, historical: full enumeration weekly}
+        fixtures: [tests/fixtures/ministry_of_coal/minutes_of_meetings.html, tests/fixtures/ministry_of_coal/minutes_archive.html, tests/fixtures/ministry_of_coal/review_minutes_table.html]
+        last_verified: '2026-10-23'
+      # --- Tracked feed added by the 2026-10-23 re-verification (needs a recorded decision; see coal_reverification.md) ---
+      - scope: Coal Gasification (/major-statistics/national-coal-gasification-mission); feed coal_gasification
+        decision: track
+        reason: Re-verification on 2026-10-23 found an active publication collection, not a narrative page. It holds the Scheme for promotion of Coal/Lignite Gasification approval, RFPs, pre-application notices, query responses, and earlier roadmap and seminar material. There are 59 dated rows in nine section tables (one nested), newest 16/09/2026. The earlier indirect decision was made from sitemap evidence only.
+        evidence_urls: [https://www.coal.nic.in/major-statistics/national-coal-gasification-mission, https://www.coal.nic.in/sitemap]
+        coverage_limit: Section headings are page layout, not authoritative categories. Files are absolute coal.gov.in links (mixed http/https, some with a doubled path slash). Items also announced in What's New are appearances of the same document.
+        refresh_policy: {weekly: full page enumeration, historical: full enumeration weekly}
+        fixtures: [tests/fixtures/ministry_of_coal/coal_gasification.html]
+        last_verified: '2026-10-23'
+      # --- Excluded or indirect by user decision ---
+      - scope: Nominated Authority Scrutiny Committee, Single Window System, and Energy Cell pages (and their archives)
+        decision: exclude
+        reason: D-015 excludes these as independent feeds. Observed content was 1 committee document, 9 single-window guidelines and user guides, and 4 Energy Cell reports.
+        evidence_urls: [https://www.coal.nic.in/nominated-authority/review-meeting-scrutiny-committee, https://www.coal.nic.in/nominated-authority/single-window-system, https://www.coal.nic.in/nominated-authority/energy-cell]
+        coverage_limit: No independent crawl. Any item that appears in What's New is still captured (D-001).
+        refresh_policy: {weekly: compare sitemap link set and What's New capture}
+        fixtures: [tests/fixtures/ministry_of_coal/sitemap.html, tests/fixtures/ministry_of_coal/whats_new.html]
+        last_verified: '2026-10-22'
+      - scope: Ministry Press Releases (/media/press-release, its archive, and the homepage press block)
+        decision: exclude
+        reason: D-014, consistent with D-013. Press releases duplicate PIB communication.
+        evidence_urls: [https://www.coal.nic.in/media/press-release, https://www.coal.nic.in/]
+        coverage_limit: No independent crawl. Releases that appear in What's New are still captured (D-001).
+        refresh_policy: {weekly: compare sitemap link set and What's New capture}
+        fixtures: [tests/fixtures/ministry_of_coal/press_releases.html]
+        last_verified: '2026-10-22'
+      - scope: Production and Supplies (/major-statistics/production-and-supplies)
+        decision: indirect
+        reason: D-016. The statistics feeds carry the same data, and narrative-page fingerprints would be noisy.
+        evidence_urls: [https://www.coal.nic.in/major-statistics/production-and-supplies]
+        coverage_limit: Inline table edits and changes to the seven linked ten-year datasets (2021-01 upload) are not detected. What's New appearances remain captured.
+        refresh_policy: {weekly: sitemap link-set compare and What's New capture}
+        fixtures: [tests/fixtures/ministry_of_coal/production_and_supplies.html]
+        last_verified: '2026-10-22'
+      # --- Indirect coverage ---
+      - scope: Sitemap and hub/landing pages (/sitemap, /major-statistics-page, /public-information, /public-information/reports, /nominated-authority, /media, /rti, /CSR, /sustainable-development-cell, /about-safety-coal-mines); feed coal_sitemap
+        decision: indirect
+        reason: Hub pages are link lists that duplicate sitemap children. Comparing the sitemap link set detects new or removed branches.
+        evidence_urls: [https://www.coal.nic.in/sitemap, https://www.coal.nic.in/public-information, https://www.coal.nic.in/nominated-authority, https://www.coal.nic.in/major-statistics-page]
+        coverage_limit: Discovery only. A new branch triggers a research review, not alerts. A broken child (/major-statistics/generation-of-thermal-power-from-raw-coal returned 404) is recorded as a sitemap anomaly. The /sustainable-development-cell hub was confirmed on 2026-10-23 as a link list with no files; its Vrikshropan Abhiyan entries render as escaped HTML text, not live links. The /CSR and /about-safety-coal-mines hubs were also confirmed as link lists (the CSR hub's only file is the CSR photo-gallery PDF).
+        refresh_policy: {weekly: compare sitemap link set, historical: not applicable}
+        fixtures: [tests/fixtures/ministry_of_coal/sitemap.html]
+        last_verified: '2026-10-23'
+      - scope: Narrative and thematic pages (Major Statistics narratives, Sustainability topic pages, Safety pages, Technology Roadmap, Achievements Flipbook, Chintan Shivir, Procurement Projection, About CSR, About NA, Allocation Tranche-Wise); Coal Gasification moved to coal_gasification on 2026-10-23
+        decision: indirect
+        reason: Descriptive pages that are either text and inline tables only, or small static file sets unchanged since 2021-2024. Observed 2026-10-23 - Coal Grades, Coal Reserves, Safety Statistics (NLCIL tables to 2022), Safety Initiatives, About CSR, About SDC, Greening Initiatives, Mine Water Utilization, and Promoting Renewable have no files. Mission Coking Coal has 2 files (2021), Grading of Coal 2 (2022-2023 lignite-grading consultation), Coal Evacuation Plan 2 (Coal Logistics Policy, 2024), Clearances 1 (2024 compendium), Technology Roadmap 4 (2022), Procurement Projection 2 (2021), Chintan Shivir 3 (2021), and Achievements Flipbook 1 PDF plus four coal.gov.in flipbook HTML links. New policy material from them is expected to surface in What's New.
+        evidence_urls: [https://www.coal.nic.in/major-statistics/coal-demand-projections, https://www.coal.nic.in/major-statistics/import-and-export, https://www.coal.nic.in/major-statistics/grading-coal, https://www.coal.nic.in/major-statistics/coal-evacuation-plan, https://www.coal.nic.in/techno-roadmap-coal-sector, https://www.coal.nic.in/nominated-authority/about-na, https://www.coal.nic.in/nominated-authority/allocation-tranche-wise, https://www.coal.nic.in/sitemap]
+        coverage_limit: Unannounced edits to these pages, including a new file added to one of the small static tables, are not detected. Coal Evacuation Plan and Clearances also contain escaped HTML table rows rendered as text, which are not live links. Never fetched in any session - /major-statistics/safety-coal-mines (About Safety), /safety-coal-mines/accident-portal, and the SDC pages air-quality-management, eco-tourism-in-mining-area, energy-efficiency, gainful-utilization, and sdc-videoes.
+        refresh_policy: {weekly: sitemap link-set compare and What's New capture, historical: not applicable}
+        fixtures: [tests/fixtures/ministry_of_coal/sitemap.html, tests/fixtures/ministry_of_coal/whats_new.html, tests/fixtures/ministry_of_coal/narrative_static_tables.html]
+        last_verified: '2026-10-23'
+      # --- Excluded: generic, administrative, operational ---
+      - scope: Generic organisation and site pages (About Us children, Who's Who, Ministers/minister profiles, Organisations, Contact Us, Help, Screen Reader Access, Website Policy, Terms, Disclaimer, Feedback, Web Information Manager, Technical Help Desk)
+        decision: exclude
+        reason: Static organisational or site-administration content outside the selected publication families.
+        evidence_urls: [https://www.coal.nic.in/sitemap, https://www.coal.nic.in/contact-us, https://www.coal.nic.in/technical-help-desk]
+        coverage_limit: No independent crawl. Relevant items remain captured if they appear in What's New.
+        refresh_policy: {weekly: compare sitemap link set}
+        fixtures: [tests/fixtures/ministry_of_coal/sitemap.html, tests/fixtures/ministry_of_coal/excluded_generic_pages.html]
+        last_verified: '2026-10-22'
+      - scope: Administrative compliance pages (Citizen Charter, Public Grievance Cell, RTI hub, PIO details, RTI proactive disclosures, Grant-in-Aid and its archive)
+        decision: exclude
+        reason: Statutory administrative disclosures (RTI s.4(1)(b), GFR Rule 230 grant statements, charter, grievance procedure), not policy, consultation, or research publications.
+        evidence_urls: [https://www.coal.nic.in/public-information/citizen-charters, https://www.coal.nic.in/rti/proactive-disclosures-rti-act-ministry-of-coal, https://www.coal.nic.in/public-information/grant-in-aid, https://www.coal.nic.in/public-information/public-grievance-cell]
+        coverage_limit: No independent crawl. What's New appearances remain captured.
+        refresh_policy: {weekly: compare sitemap link set}
+        fixtures: [tests/fixtures/ministry_of_coal/excluded_generic_pages.html]
+        last_verified: '2026-10-22'
+      - scope: Operational procurement and recruitment (Tenders, Open Tenders, Past Tenders, NA Tender and its archive, NA Vacancy and its archive, Advertisements and its archive)
+        decision: exclude
+        reason: Procurement, disposal, and recruitment notices. Coal-block auction documents are covered separately under Auction/Allotment.
+        evidence_urls: [https://www.coal.nic.in/tenders, https://www.coal.nic.in/tenders/past-tender, https://www.coal.nic.in/nominated-authority/tender-na, https://www.coal.nic.in/nominated-authority/vacancy, https://www.coal.nic.in/public-information/advertisements]
+        coverage_limit: No independent crawl. Open Tenders was empty when observed. What's New appearances remain captured.
+        refresh_policy: {weekly: compare sitemap link set}
+        fixtures: [tests/fixtures/ministry_of_coal/excluded_operational_tables.html]
+        last_verified: '2026-10-22'
+      - scope: Galleries, videos, and legacy showcase collections (Photo Gallery, SDC Videos, CSR Photo Gallery PDF, Success Stories, Mines Summary)
+        decision: exclude
+        reason: Media galleries plus static 2019 PSU success stories and coal-block exploration summaries, which have not been updated since 2019.
+        evidence_urls: [https://www.coal.nic.in/media/photo-gallery, https://www.coal.nic.in/public-information/success-storie, https://www.coal.nic.in/public-information/mine-summary]
+        coverage_limit: No independent crawl. Revisit if the sitemap link set or What's New shows renewed activity.
+        refresh_policy: {weekly: compare sitemap link set}
+        fixtures: [tests/fixtures/ministry_of_coal/sitemap.html]
+        last_verified: '2026-10-22'
+      # --- Excluded: external ---
+      - scope: External outbound links (PIB press releases, Lok Sabha/Rajya Sabha Q&A via Parliament Q&A, rti.gov.in, Critical and Super Critical Coal Stocks on coalindia.in, coal-block portals, SWCS/CIMS/star-rating/coal-dashboard/CMPDI portals, CPPP eprocure, MSTC, india.gov.in and footer portals, social media)
+        decision: exclude
+        reason: External sites are outside v1 crawling. The Critical and Super Critical Coal Stocks branch is only an outbound link to Coal India, so that candidate family has no Ministry-hosted publications.
+        evidence_urls: [https://www.coal.nic.in/public-information/critical-and-Super-critical-coal-stocks, https://www.coal.nic.in/parliament-qa, https://www.coal.nic.in/nominated-authority/coal-block-information, https://www.coal.nic.in/sitemap]
+        coverage_limit: Recorded as outbound links only. Changes on the external sites are not detected.
+        refresh_policy: {weekly: compare sitemap outbound link set}
+        fixtures: [tests/fixtures/ministry_of_coal/external_link_pages.html, tests/fixtures/ministry_of_coal/sitemap.html]
+        last_verified: '2026-10-22'
+      # --- Excluded: alternate access paths ---
+      - scope: Site search (/index.php/search/node?keys=) and the Hindi interface variant (language dropdown en/hi)
+        decision: exclude
+        reason: Drupal keyword search is not an enumerable or authoritative feed (149 pages of 10 results for "auction", direct file links, repeated results, index timestamps instead of publication dates). The Hindi interface (/hi) re-presents the same nodes, and English listing metadata is authoritative under D-005.
+        evidence_urls: [https://www.coal.nic.in/sitemap, https://www.coal.nic.in/, https://www.coal.nic.in/hi, 'https://www.coal.nic.in/index.php/search/node?keys=auction']
+        coverage_limit: Paired English/Hindi files linked from tracked pages are kept as separate documents under one row or matter. On 2026-10-23 a spot check of the Hindi homepage What's New block found no Hindi-only publication, but about half its items link a distinct Hindi-language PDF that only the Hindi interface links. Those Hindi translation files are not collected. Hindi-only nodes, if any exist, are not detected.
+        refresh_policy: {weekly: none, historical: research re-check only}
+        fixtures: [tests/fixtures/ministry_of_coal/nested_report_detail.html, tests/fixtures/ministry_of_coal/hindi_whats_new_block.html, tests/fixtures/ministry_of_coal/site_search_results.html]
+        last_verified: '2026-10-23'
+    research_status: preliminary
+    feeds:
+      - id: coal_sitemap
+        purpose: Enumerate navigation branches and drive explicit track, indirect, or exclude decisions.
+        url: https://www.coal.nic.in/sitemap
+        discovery_method: sitemap
+        kind: discovery
+        decision: indirect
+        enumeration: {method: single HTML page, termination: end of sitemap tree}
+        identity: {native_ids: [href], fallback: source-scoped canonical URL}
+        date_semantics: {displayed: none, modified: page last-updated label}
+        expected_mime_types: [text/html]
+        language_behavior: English sitemap links to English pages; Hindi navigation is a separate variant.
+        refresh_policy: {weekly: compare link set, historical: not applicable}
+        completeness:
+          removal_authority: false
+          failure_indicators: [missing Sitemap heading, missing navigation tree, block page]
+        history: {boundary: current navigation only, boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/sitemap.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: coal_whats_new
+        purpose: Capture the Ministry's broad recent-publication bulletin.
+        url: https://www.coal.nic.in/whats-new
+        discovery_method: navigation
+        kind: rolling
+        decision: track
+        enumeration: {method: page query parameter over the single four-column table (50 rows per page), termination: pager Last page link (observed page=40; read it on page=0 every run)}
+        identity: {native_ids: [attachment href], fallback: page number plus row provenance and source-scoped canonical URL; a row with no link (observed title "test") is kept as a linkless appearance}
+        date_semantics: {displayed: DD Mon YYYY publication date; may be empty or malformed (year 0013) and is never corrected, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata; file language is recorded independently.
+        refresh_policy: {weekly: pager pages from page=0 until a page holds only known hrefs (at least page=0 and page=1), historical: full pager enumeration monthly (about 41 requests at 0.25 req/s); never infer removal from expiry}
+        completeness:
+          removal_authority: false
+          failure_indicators: [missing What's New heading, missing four-column table, missing pager Last page link, page row count above 50, unexpected empty table before the pager terminus, CAPTCHA Validation request page, block page]
+          notes: The 2026-10-22 contract treated this as one 50-row table; the 2026-10-23 re-check found the pager. The silent initial baseline must enumerate all 41 pages (page=0 through page=40 as observed, or through whatever Last page link page=0 then shows) without alerts; a partial baseline must not be treated as complete. kind stays rolling and removal_authority stays false; reclassification is a Step 2 question. A requested page past the terminus renders the pager without a table (see paged_view_out_of_range.html).
+        history: {boundary: 2042 rows across pager pages 0-40 (S.N 1-2042; page 40 holds 42 rows); newest 16 Oct 2026; oldest displayed date 26 Apr 2000; last-page tail has one row dated 08 Oct 0013 and four undated rows (one titled test with no link); pages 1-39 not fetched individually (page 40 starts at S.N 2001), boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/whats-new, 'https://www.coal.nic.in/whats-new?page=40', https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/whats_new.html, tests/fixtures/ministry_of_coal/whats_new_paged.html, tests/fixtures/ministry_of_coal/whats_new_last_page.html, tests/fixtures/ministry_of_coal/paged_view_out_of_range.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_acts_rules_policies
+        purpose: Capture the complete Ministry collection of Acts, rules, policies, methodologies, and notifications.
+        url: https://www.coal.nic.in/acts-rules-policies
+        discovery_method: sitemap
+        kind: authoritative_collection
+        decision: track
+        enumeration: {method: five HTML tables on one page, termination: end of the fifth table}
+        identity: {native_ids: [attachment href], fallback: table heading plus row provenance and source-scoped canonical URL}
+        date_semantics: {published: row text when present, uploaded: URL path is not authoritative, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata; linked files may be English, Hindi, bilingual, scanned, or unreadable.
+        refresh_policy: {weekly: full five-table enumeration, historical: full enumeration weekly because old rows can change}
+        completeness:
+          removal_authority: true
+          failure_indicators: [missing page heading, fewer than five content tables, unexpected row-count collapse, block page]
+        history: {boundary: five tables with 20+116+9+12+10 = 167 data rows (172 HTML rows with headers); dates 26/11/1960 to 29/06/2026; no pager and no archive link (re-checked 2026-10-23), boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/acts-rules-policies, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/acts_rules_policies.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_monthly_statistics
+        <<: *coal_direct_table
+        purpose: Track Monthly Statistics at a Glance publications.
+        url: https://www.coal.nic.in/public-information/monthly-statistics-at-glance
+        enumeration: {method: page query parameter over the single attachment table (50 rows per page), termination: pager Last page link (observed page=1)}
+        refresh_policy: {weekly: all pager pages, historical: full enumeration weekly}
+        completeness:
+          removal_authority: true
+          removal_rule: A row is removed only when absent from every pager page in two consecutive complete enumerations
+          failure_indicators: [missing page heading, missing attachment table, missing pager Last page link, unexpected row-count collapse, CAPTCHA Validation request page, block page]
+        history: {boundary: 64 rows across pager pages 0-1 (50 + 14) with period labels Sept 2026 back to April 2021 with gaps; no archive link; the 2026-10-22 boundary of 50 rows missed page 1, boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/public-information/monthly-statistics-at-glance, 'https://www.coal.nic.in/public-information/monthly-statistics-at-glance?page=1', https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html, tests/fixtures/ministry_of_coal/paged_table_with_archive.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_statistical_reports
+        <<: *coal_direct_table
+        purpose: Track the distinct monthly Statistical Report collection.
+        url: https://www.coal.nic.in/public-information/statistical-report
+        enumeration: {method: page query parameter over the single attachment table (50 rows per page), termination: pager Last page link (observed page=1)}
+        refresh_policy: {weekly: all pager pages, historical: full enumeration weekly}
+        completeness:
+          removal_authority: true
+          removal_rule: A row is removed only when absent from every pager page in two consecutive complete enumerations
+          failure_indicators: [missing page heading, missing attachment table, missing pager Last page link, unexpected row-count collapse, CAPTCHA Validation request page, block page]
+        history: {boundary: 56 rows across pager pages 0-1 (50 + 6) with period labels March 2025 (first row) back to April 2020; no archive link; the 2026-10-22 boundary of 50 rows missed page 1, boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/public-information/statistical-report, 'https://www.coal.nic.in/public-information/statistical-report?page=1', https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html, tests/fixtures/ministry_of_coal/paged_table_with_archive.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_quarterly_reports
+        <<: *coal_direct_table
+        purpose: Track quarterly coal-sector report booklets.
+        url: https://www.coal.nic.in/major-statistics/quarterly-booklet
+        date_semantics: {displayed: DD-MM-YYYY row date (table has no S.N column), first_seen: tracker discovery time}
+        history: {boundary: 10 data rows from 17-09-2026 (Q1 2026-27) back to 22-05-2024 (Q4 2023-24); no pager and no archive link (re-checked 2026-10-23), boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/major-statistics/quarterly-booklet, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_rsr_reports
+        <<: *coal_direct_table
+        purpose: Track RSR reports.
+        url: https://www.coal.nic.in/major-statistics/rsr-report
+        history: {boundary: one undated data row (inter-ministerial report on coal movement through ports and waterways); no pager and no archive link (re-checked 2026-10-23), boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/major-statistics/rsr-report, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_coal_statistics
+        <<: *coal_direct_table
+        purpose: Track annual Coal Statistics publications.
+        url: https://www.coal.nic.in/major-statistics/coal-statistics
+        history: {boundary: 17 data rows; no pager and no archive link (re-checked 2026-10-23), boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/major-statistics/coal-statistics, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_sustainability_reports
+        <<: *coal_direct_table
+        purpose: Track Sustainable Development Cell guidelines and reports.
+        url: https://www.coal.nic.in/sustainable-development-cell/report
+        date_semantics: {displayed: DD-MM-YYYY row date (table has no S.N column), first_seen: tracker discovery time}
+        history: {boundary: three data rows from 24-10-2024 back to 01-08-2024; no pager and no archive link (re-checked 2026-10-23), boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/sustainable-development-cell/report, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_compensation_orders
+        <<: *coal_direct_table
+        purpose: Track Nominated Authority compensation and sanction orders/notices.
+        url: https://www.coal.nic.in/nominated-authority/sanction-order-notice
+        kind: rotating_archive
+        archive_url: https://www.coal.nic.in/nominated-authority/archive-sanction-order-notice
+        archive_href_rewrite: {applies_to: archive footer href emitted as http://www.coal.nic.in//<path>, rewrite_to: https://www.coal.nic.in/<path>, rule: force HTTPS and collapse the duplicated slash after the host; keep path and query; coal.nic.in only}
+        enumeration: {method: page query parameter over the current table (50 rows per page) then the archive page and its pager, termination: current pager Last page link (observed page=4) then archive pager Last page link (observed page=1)}
+        refresh_policy: {weekly: all current pager pages plus all archive pages, historical: full enumeration weekly}
+        completeness:
+          removal_authority: true
+          removal_rule: A row is removed only when absent from every current and archive page in two consecutive complete enumerations; a move from current to archive is a status change
+          failure_indicators: [missing Compensation Orders heading, missing attachment table, missing pager Last page link, missing Archive link, unexpected row-count collapse, CAPTCHA Validation request page, block page]
+        history: {boundary: current 233 rows across pager pages 0-4 (page 4 holds S.N 201-233) from 06/10/2026 back to 28/10/2016; archive 63 undated rows across pages 0-1 (50 + 13) covering 2014-2015 Ordinance-era orders with 2021 upload folders; pages 1-3 not fetched individually, boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/nominated-authority/sanction-order-notice, 'https://www.coal.nic.in/nominated-authority/sanction-order-notice?page=4', https://www.coal.nic.in/nominated-authority/archive-sanction-order-notice, 'https://www.coal.nic.in/nominated-authority/archive-sanction-order-notice?page=1', https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html, tests/fixtures/ministry_of_coal/paged_table_with_archive.html, tests/fixtures/ministry_of_coal/archive_table_paged.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_termination_orders
+        <<: *coal_direct_table
+        purpose: Track Nominated Authority coal-mine termination and surrender orders.
+        url: https://www.coal.nic.in/nominated-authority/termination-order
+        kind: rotating_archive
+        archive_url: https://www.coal.nic.in/nominated-authority/archive-termination-order
+        archive_href_rewrite: {applies_to: archive footer href emitted as http://www.coal.nic.in//<path>, rewrite_to: https://www.coal.nic.in/<path>, rule: force HTTPS and collapse the duplicated slash after the host; keep path and query; coal.nic.in only}
+        enumeration: {method: explanatory allocation table followed by attachment table then the single-page archive table, termination: end of second table then end of archive table (archive pager list is empty)}
+        date_semantics: {displayed: DD/MM/YYYY row date on current rows; archive rows have no date column, first_seen: tracker discovery time}
+        refresh_policy: {weekly: current page plus archive, historical: full enumeration weekly}
+        completeness:
+          removal_authority: true
+          removal_rule: A row is removed only when absent from both the current attachment table and the archive in two consecutive complete enumerations; a move from current to archive is a status change
+          failure_indicators: [missing Termination Order heading, fewer than two tables, missing Archive link, missing archive table, unexpected row-count collapse, CAPTCHA Validation request page, block page]
+        history: {boundary: current attachment table has 32 rows from 29/06/2026 back to 13/01/2017 (no pager); explanatory table lists 32 blocks; archive (fetched 2026-10-23 via the HTTPS single-slash rewrite) has one undated row (Kasta East allotment termination; file in the 2021-05 upload folder) on a single page with no overlap with current hrefs, boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/nominated-authority/termination-order, https://www.coal.nic.in/nominated-authority/archive-termination-order, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/termination_orders.html, tests/fixtures/ministry_of_coal/minutes_of_meetings.html, tests/fixtures/ministry_of_coal/auction_allotment_archive.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_national_coal_index
+        <<: *coal_direct_table
+        purpose: Track National Coal Index monthly publications.
+        url: https://www.coal.nic.in/nominated-authority/national-coal-index
+        kind: rotating_archive
+        archive_url: https://www.coal.nic.in/nominated-authority/archive-national-coal-index
+        archive_href_rewrite: {applies_to: archive footer href emitted as http://www.coal.nic.in//<path>, rewrite_to: https://www.coal.nic.in/<path>, rule: force HTTPS and collapse the duplicated slash after the host; keep path and query; coal.nic.in only}
+        enumeration: {method: page query parameter over the current table (50 rows per page) then the single-page archive table, termination: current pager Last page link (observed page=1) then end of archive table (no archive pager observed)}
+        refresh_policy: {weekly: all current pager pages plus archive, historical: full enumeration weekly}
+        completeness:
+          removal_authority: true
+          removal_rule: A row is removed only when absent from every current page and the archive in two consecutive complete enumerations; a move from current to archive is a status change
+          failure_indicators: [missing National Coal Index heading, missing attachment table, missing pager Last page link, missing Archive link, unexpected row-count collapse, CAPTCHA Validation request page, block page]
+        history: {boundary: current 83 rows (82 distinct hrefs) across pager pages 0-1 (50 + 33) from 29/09/2026 back to 05/06/2020; archive 4 undated rows (NCI for April/July/August 2021 and November 2022 provisional) with no pager and no overlap with current hrefs, boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/nominated-authority/national-coal-index, 'https://www.coal.nic.in/nominated-authority/national-coal-index?page=1', https://www.coal.nic.in/nominated-authority/archive-national-coal-index, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html, tests/fixtures/ministry_of_coal/paged_table_with_archive.html, tests/fixtures/ministry_of_coal/auction_allotment_archive.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_national_lignite_index
+        <<: *coal_direct_table
+        purpose: Track National Lignite Index monthly publications.
+        url: https://www.coal.nic.in/nominated-authority/national-lignite
+        date_semantics: {displayed: DD-MM-YYYY row date, first_seen: tracker discovery time}
+        history: {boundary: 11 data rows from 16-10-2026 back to 07-12-2023; no pager and no archive link (re-checked 2026-10-23), boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/nominated-authority/national-lignite, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_cabinet_summaries
+        <<: *coal_direct_table
+        purpose: Track Monthly Summary for Cabinet publications.
+        url: https://www.coal.nic.in/public-information/monthly-summary-cabinets
+        kind: rotating_archive
+        archive_url: https://www.coal.nic.in/public-information/monthly-summary-cabinets/archive-monthly-summary-cabinets
+        archive_href_rewrite: {applies_to: archive footer href emitted as http://www.coal.nic.in//<path>, rewrite_to: https://www.coal.nic.in/<path>, rule: force HTTPS and collapse the duplicated slash after the host; keep path and query; coal.nic.in only}
+        enumeration: {method: current single table then the archive page and its pager, termination: end of current table (no pager observed) then archive pager Last page link (observed page=1)}
+        refresh_policy: {weekly: current table plus all archive pages, historical: full enumeration weekly}
+        completeness:
+          removal_authority: true
+          removal_rule: A row is removed only when absent from the current table and every archive page in two consecutive complete enumerations; a move from current to archive is a status change
+          failure_indicators: [missing page heading, missing attachment table, missing Archive link, unexpected row-count collapse, CAPTCHA Validation request page, block page]
+        history: {boundary: current 48 rows with period labels February 2025 back to August 2020 and no pager; archive 77 rows across pages 0-1 (50 + 27) with period labels December 2022 back to September 2014; period ranges overlap but no href is shared, boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/public-information/monthly-summary-cabinets, https://www.coal.nic.in/public-information/monthly-summary-cabinets/archive-monthly-summary-cabinets, 'https://www.coal.nic.in/public-information/monthly-summary-cabinets/archive-monthly-summary-cabinets?page=1', https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html, tests/fixtures/ministry_of_coal/archive_table_paged.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_standing_linkage_committee
+        <<: *coal_direct_table
+        purpose: Track Standing Linkage Committee agendas, minutes, consultations, and related material.
+        url: https://www.coal.nic.in/public-information/standing-linkage-committee1
+        enumeration: {method: page query parameter, termination: pager last page is page=1}
+        history: {boundary: 89 data rows across pages 0 and 1; oldest displayed date 16 August 2017; page 0 re-checked 2026-10-23 (50 rows from 2026-06-15; pager Last page still page=1; no archive link), boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/public-information/standing-linkage-committee1, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_annual_reports
+        <<: *coal_direct_table
+        purpose: Track annual-report parent pages and every chapter attachment nested beneath them.
+        url: https://www.coal.nic.in/public-information/reports/annual-reports
+        kind: detail_parent
+        enumeration: {method: 18-row parent index followed by every linked detail table, termination: all parent links and child rows exhausted}
+        identity: {native_ids: [parent href, attachment href], fallback: parent and child row provenance plus source-scoped canonical URL}
+        refresh_policy: {weekly: full parent index and current/prior-year children, historical: quarterly full child rescan}
+        history: {boundary: 18 parent rows from 2009-10 through 2025-26 and 355 child attachments; parent index re-checked 2026-10-23 (18 rows; no pager or archive link; children not re-fetched), boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/public-information/reports/annual-reports, https://www.coal.nic.in/public-information/reports/annual-reports/annual-report-2025-26, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/nested_report_index.html, tests/fixtures/ministry_of_coal/nested_report_detail.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: coal_budget_reports
+        <<: *coal_direct_table
+        purpose: Track budget-report parent pages and all nested attachments.
+        url: https://www.coal.nic.in/public-information/reports/budget-reports
+        kind: detail_parent
+        enumeration: {method: 18-row parent index followed by every linked detail table, termination: all parent links and child rows exhausted}
+        identity: {native_ids: [parent href, attachment href], fallback: parent and child row provenance plus source-scoped canonical URL}
+        refresh_policy: {weekly: full parent index and current/prior-year children, historical: quarterly full child rescan}
+        history: {boundary: 18 parent rows from 2009-10 through 2026-27 and 38 child attachments; parent index re-checked 2026-10-23 (18 rows; no pager or archive link; children not re-fetched), boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/public-information/reports/budget-reports, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/nested_report_index.html, tests/fixtures/ministry_of_coal/nested_report_detail.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: coal_other_reports
+        <<: *coal_direct_table
+        purpose: Track other-report parent pages and all nested attachments.
+        url: https://www.coal.nic.in/public-information/reports/other-reports
+        kind: detail_parent
+        enumeration: {method: three-row parent index followed by every linked detail table, termination: all parent links and child rows exhausted}
+        identity: {native_ids: [parent href, attachment href], fallback: parent and child row provenance plus source-scoped canonical URL}
+        refresh_policy: {weekly: full parent index and active children, historical: quarterly full child rescan}
+        history: {boundary: three parent rows with one child attachment each; parent index re-checked 2026-10-23 (no pager or archive link), boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/public-information/reports/other-reports, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/nested_report_index.html, tests/fixtures/ministry_of_coal/nested_report_detail.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: coal_action_plans
+        <<: *coal_direct_table
+        purpose: Track Ministry action plans.
+        url: https://www.coal.nic.in/public-information/action-plan
+        enumeration: {method: main-content ordered link list, termination: end of list}
+        history: {boundary: three action-plan links for FY 2024 through FY 2025-26 (two coal.gov.in PDFs and one coal.gov.in/actionplan HTML page for FY 2024); no pager or archive link (re-checked 2026-10-23), boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/public-information/action-plan, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/direct_link_list.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: coal_monthly_cabinet_reports
+        <<: *coal_direct_table
+        purpose: Track monthly reports for Cabinet across the current table and archive.
+        url: https://www.coal.nic.in/public-information/monthly-report-cabinet
+        kind: rotating_archive
+        archive_url: https://www.coal.nic.in/public-information/monthly-report-cabinet/archive-monthly-report-cabinet
+        archive_href_rewrite: {applies_to: archive footer href emitted as http://www.coal.nic.in//<path>, rewrite_to: https://www.coal.nic.in/<path>, rule: force HTTPS and collapse the duplicated slash after the host; keep path and query; coal.nic.in only}
+        enumeration: {method: page query parameter over the current table (50 rows per page) then the archive page and its pager, termination: current pager Last page link (observed page=1) then archive pager Last page link (observed page=1)}
+        refresh_policy: {weekly: all current pager pages plus all archive pages, historical: full enumeration weekly}
+        date_semantics: {displayed: period label (month and year) plus a YYYY-MM-DD posting date on current rows only; archive rows have no date column, first_seen: tracker discovery time}
+        completeness:
+          removal_authority: true
+          removal_rule: A row is removed only when absent from every current and archive page in two consecutive complete enumerations; a move from current to archive is a status change
+          failure_indicators: [missing page heading, missing attachment table, missing pager Last page link, missing Archive link, unexpected row-count collapse, CAPTCHA Validation request page, block page]
+        history: {boundary: current 56 rows across pager pages 0-1 (50 + 6) from October 2025 (posted 2025-11-10) back to November 2018 (posted 2018-11-21); archive 66 rows across pages 0-1 (50 + 16) from September 2021 back to April 2015; one archive row (September 2016) has no link; no href is shared; the 2026-10-22 boundary missed both page-1 pages, boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/public-information/monthly-report-cabinet, 'https://www.coal.nic.in/public-information/monthly-report-cabinet?page=1', https://www.coal.nic.in/public-information/monthly-report-cabinet/archive-monthly-report-cabinet, 'https://www.coal.nic.in/public-information/monthly-report-cabinet/archive-monthly-report-cabinet?page=1', https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html, tests/fixtures/ministry_of_coal/paged_table_with_archive.html, tests/fixtures/ministry_of_coal/archive_table_paged.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_papers_laid
+        <<: *coal_direct_table
+        purpose: Track notifications, rules, reports, and parliamentary material laid on the table.
+        url: https://www.coal.nic.in/public-information/paper-laid-table
+        date_semantics: {displayed: title-embedded date when present, first_seen: tracker discovery time}
+        history: {boundary: 11 data rows; no pager and no archive link (re-checked 2026-10-23), boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/public-information/paper-laid-table, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_sop
+        <<: *coal_direct_table
+        purpose: Track Ministry standard operating procedures.
+        url: https://www.coal.nic.in/public-information/sop
+        history: {boundary: one data row dated 08-08-2024 (no S.N column); no pager and no archive link (re-checked 2026-10-23), boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/public-information/sop, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_csr_guidelines
+        <<: *coal_direct_table
+        purpose: Track Ministry and coal-company CSR policies, guidance, and clarifications.
+        url: https://www.coal.nic.in/CSR/guidelines
+        history: {boundary: eight data rows all dated 03-04-2024 (a posting date; the policies themselves date from 2021 onward); no pager and no archive link (re-checked 2026-10-23), boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/CSR/guidelines, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/direct_attachment_table.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_central_schemes
+        purpose: Track the canonical Ministry page describing the three Central Sector Schemes and their budget table.
+        url: https://www.coal.nic.in/central-sector-schemes
+        discovery_method: sitemap
+        kind: detail_parent
+        decision: track
+        enumeration: {method: one canonical narrative page and embedded budget table, termination: end of main content}
+        identity: {native_ids: [canonical page URL], fallback: source-scoped canonical URL}
+        date_semantics: {modified: page last-updated label, first_seen: tracker discovery time}
+        expected_mime_types: [text/html]
+        language_behavior: Track the English page; record Hindi as a language appearance when a paired page is confirmed.
+        refresh_policy: {weekly: full page fingerprint, historical: not applicable}
+        completeness:
+          removal_authority: false
+          failure_indicators: [missing Central Sector Schemes heading, missing three-scheme list, missing budget table, block page]
+        history: {boundary: one canonical page describing three schemes and one budget table (BE/RE 2022-23 columns; no linked files); no pager or archive link (re-checked 2026-10-23), boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/central-sector-schemes, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/central_sector_schemes.html]
+        verified: true
+        last_verified: '2026-10-23'
+      # D-015 feeds. Rate limit per D-017 (0.25 req/s with backoff). Archive hrefs are
+      # emitted as http://www.coal.nic.in//<path>; rewrite to https://www.coal.nic.in/<path>
+      # (HTTPS scheme, single slash) before fetching. This is a tested coal-specific URL rule.
+      - id: coal_auction_allotment
+        <<: *coal_direct_table
+        purpose: Track Nominated Authority coal-block auction and allotment documents, tranche notices, tender documents, and bidder declarations (D-015).
+        url: https://www.coal.nic.in/nominated-authority/auction-allotment
+        kind: rotating_archive
+        archive_url: https://www.coal.nic.in/nominated-authority/archive-auction-allotment
+        archive_href_rewrite: {applies_to: archive footer href emitted as http://www.coal.nic.in//nominated-authority/archive-auction-allotment, rewrite_to: https://www.coal.nic.in/nominated-authority/archive-auction-allotment, rule: force HTTPS and collapse the duplicated slash after the host; keep path and query; coal.nic.in only; tested 2026-10-23 (HTTP 200 archive page)}
+        enumeration: {method: page query parameter over the second (document) table (50 rows per page; the first table is state statistics) then the archive page, termination: pager Last page link read on page=0 (observed page=8; page=8 has no Next or Last link) then end of the single-page archive table (archive pager list is empty)}
+        identity: {native_ids: [attachment href], fallback: page number plus row provenance and source-scoped canonical URL; a href repeated across or within pages is one document with several appearances}
+        date_semantics: {displayed: DD/MM/YYYY row date on current pages; archive rows have no date column (title-embedded dates only), uploaded: URL path is not authoritative (all archive files sit in 2021 upload folders), first_seen: tracker discovery time}
+        refresh_policy: {weekly: all current pager pages plus archive, historical: full enumeration weekly}
+        completeness:
+          removal_authority: false
+          failure_indicators: [missing Auction/Allotment heading, fewer than two tables on a page before the terminus, missing pager Last page link, page row count above 50, missing Archive link, unexpected row-count collapse, CAPTCHA Validation request page, block page]
+          notes: Offset paging over tied dates repeats rows across page boundaries (7 hrefs repeated at the boundaries after S.N 100/150/300/350/400 and 1 within page 1 on 2026-10-23) and may skip other same-date rows. Deduplicate by href and never infer removal. A request past the terminus (page=9) returns HTTP 200 with the pager but no tables; it is not an empty collection. Refetches of the same page were identical apart from an injected anti-bot script tag.
+        history: {boundary: 414 document rows across pager pages 0-8 (8 x 50 + 14; S.N 1-414 contiguous; 406 distinct hrefs) from 07/10/2026 back to 19/04/2017 with every row dated; page=9 is past the terminus; archive has 40 undated rows on one page (2014 Ordinance earmarking orders to 2021 tranche notices) with no overlap with current hrefs, boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/nominated-authority/auction-allotment, 'https://www.coal.nic.in/nominated-authority/auction-allotment?page=8', 'https://www.coal.nic.in/nominated-authority/auction-allotment?page=9', https://www.coal.nic.in/nominated-authority/archive-auction-allotment, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/auction_allotment.html, tests/fixtures/ministry_of_coal/auction_allotment_last_page.html, tests/fixtures/ministry_of_coal/auction_allotment_page_overlap.html, tests/fixtures/ministry_of_coal/paged_view_out_of_range.html, tests/fixtures/ministry_of_coal/auction_allotment_archive.html, tests/fixtures/ministry_of_coal/captcha_block.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_minutes_of_meetings
+        <<: *coal_direct_table
+        purpose: Track general Ministry meeting minutes and notices (inter-ministerial groups, review meetings) beyond the Standing Linkage Committee feed (D-015).
+        url: https://www.coal.nic.in/public-information/minutes-metings
+        kind: rotating_archive
+        archive_url: https://www.coal.nic.in/public-information/minutes-metings/archive-minutes-metings
+        archive_href_rewrite: {applies_to: archive footer href emitted as http://www.coal.nic.in//public-information/minutes-metings/archive-minutes-metings, rewrite_to: https://www.coal.nic.in/public-information/minutes-metings/archive-minutes-metings, rule: force HTTPS and collapse the duplicated slash after the host; keep path and query; coal.nic.in only; tested 2026-10-23 (HTTP 200 archive page)}
+        enumeration: {method: current single table then the archive page and its pager (50 rows per page), termination: end of current table (no pager) then archive pager Last page link (observed page=1; page=1 has no Next or Last link)}
+        date_semantics: {displayed: YYYY-MM-DD row date on current and archive rows; archive rows are not in date order, uploaded: URL path is not authoritative, first_seen: tracker discovery time}
+        refresh_policy: {weekly: current table plus all archive pages, historical: full enumeration weekly}
+        completeness:
+          removal_authority: false
+          failure_indicators: [missing Minutes of Meetings heading, missing four-column table, missing Archive link, missing archive pager Last page link, unexpected row-count collapse, CAPTCHA Validation request page, block page]
+        history: {boundary: current table has 23 rows from 2021-01-29 through 2025-10-07 with no pager (observed 2026-10-22); archive has 93 rows across pages 0-1 (50 + 43; S.N 1-93; 93 distinct hrefs) dated 2005-06-02 to 2019-12-13 with no overlap with current hrefs, boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/public-information/minutes-metings, https://www.coal.nic.in/public-information/minutes-metings/archive-minutes-metings, 'https://www.coal.nic.in/public-information/minutes-metings/archive-minutes-metings?page=1', https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/minutes_of_meetings.html, tests/fixtures/ministry_of_coal/minutes_archive.html, tests/fixtures/ministry_of_coal/captcha_block.html]
+        verified: true
+        last_verified: '2026-10-23'
+      - id: coal_production_reviews
+        <<: *coal_direct_table
+        purpose: Track minutes of captive and commercial coal-block production review meetings (D-015).
+        url: https://www.coal.nic.in/nominated-authority/production-reviews
+        enumeration: {method: narrative followed by a single attachment table, termination: end of table}
+        identity: {native_ids: [attachment href], fallback: row provenance plus source-scoped canonical URL; a repeated href is one document with several appearances}
+        date_semantics: {displayed: DD-MM-YYYY row date, uploaded: 2023-06 folder on http://coal.gov.in is not authoritative, first_seen: tracker discovery time}
+        completeness:
+          removal_authority: true
+          failure_indicators: [missing attachment table, unexpected row-count collapse, CAPTCHA Validation request page, block page]
+        history: {boundary: 25 rows (24 distinct hrefs) from 19-10-2022 through 24-07-2025; no pager and no archive link, boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/nominated-authority/production-reviews, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/review_minutes_table.html, tests/fixtures/ministry_of_coal/captcha_block.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: coal_operationalisation_reviews
+        <<: *coal_direct_table
+        purpose: Track minutes of coal-block operationalisation review meetings (D-015).
+        url: https://www.coal.nic.in/nominated-authority/operationalisation-reviews
+        enumeration: {method: narrative and summary statistics table followed by the attachment table, termination: end of second table}
+        identity: {native_ids: [attachment href], fallback: row provenance plus source-scoped canonical URL; a repeated href is one document with several appearances}
+        date_semantics: {displayed: DD-MM-YYYY row date, uploaded: 2023-06/opt folder on http://coal.gov.in is not authoritative, first_seen: tracker discovery time}
+        completeness:
+          removal_authority: true
+          failure_indicators: [fewer than two tables, unexpected row-count collapse, CAPTCHA Validation request page, block page]
+        history: {boundary: 26 rows (24 distinct hrefs) from 15-09-2021 through 23-05-2025; no pager and no archive link, boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/nominated-authority/operationalisation-reviews, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/review_minutes_table.html, tests/fixtures/ministry_of_coal/captcha_block.html]
+        verified: true
+        last_verified: '2026-10-22'
+      # Added by the 2026-10-23 re-verification; the page was previously indirect from sitemap evidence only.
+      # Needs a recorded product decision (see docs/step1_pending/coal_reverification.md).
+      - id: coal_gasification
+        <<: *coal_direct_table
+        purpose: Track the Coal Gasification publication collection (Scheme for promotion of Coal/Lignite Gasification, RFPs, notices, query responses, roadmap, and seminar material).
+        url: https://www.coal.nic.in/major-statistics/national-coal-gasification-mission
+        enumeration: {method: every Title/Attachment/Date section table on the one page (nine section tables; one table is nested inside the investors-meet section), termination: end of the last section table}
+        identity: {native_ids: [attachment href], fallback: section heading plus row provenance and source-scoped canonical URL; hrefs are absolute coal.gov.in URLs in mixed http/https and some carry a doubled path slash (https://coal.gov.in//sites/...); keep the raw href and do not merge on a normalised href without a tested rule}
+        date_semantics: {displayed: DD/MM/YYYY row date (one row undated), uploaded: URL path is not authoritative, first_seen: tracker discovery time}
+        completeness:
+          removal_authority: false
+          failure_indicators: [missing Coal Gasification heading, fewer than nine section tables, unexpected row-count collapse, CAPTCHA Validation request page, block page]
+          notes: Sections are page layout and may be reorganised, so removal is not inferred. Many rows are also announced in What's New with the same file; those are appearances of one document.
+        history: {boundary: 59 rows with 59 links (57 distinct hrefs) in ten HTML tables (nine sections plus one nested table) dated 16/09/2026 back to 21/09/2021; one undated row; no pager and no archive link, boundary_verified: true}
+        evidence_urls: [https://www.coal.nic.in/major-statistics/national-coal-gasification-mission, https://www.coal.nic.in/sitemap]
+        fixtures: [tests/fixtures/ministry_of_coal/coal_gasification.html]
+        verified: true
+        last_verified: '2026-10-23'
+
+  - id: cerc
+    name: Central Electricity Regulatory Commission
+    base_url: https://cercind.gov.in/
+    allowed_hosts:
+      - cercind.gov.in
+      - www.cercind.gov.in
+    required_feed_ids:
+      - cerc_sitemap
+      - cerc_home
+      - cerc_draft_regulations
+      - cerc_current_regulations
+      - cerc_discussion_papers
+      - cerc_working_papers
+      - cerc_study_reports
+      - cerc_recent_orders
+      - cerc_order_archives
+      - cerc_recent_rops
+      - cerc_rop_archives
+      - cerc_market_monitoring
+      - cerc_annual_reports
+      - cerc_other_reports
+      - cerc_public_hearings
+      - cerc_hearing_schedule
+      - cerc_public_notices
+      - cerc_statutory_public_notices
+      - cerc_statutory_advice
+    research_status: preliminary
+    feeds:
+      - id: cerc_sitemap
+        purpose: Enumerate navigation branches and drive explicit coverage decisions.
+        url: https://cercind.gov.in/site_map.html
+        discovery_method: sitemap
+        kind: discovery
+        decision: indirect
+        enumeration: {method: single HTML page, termination: end of sitemap tree}
+        identity: {native_ids: [href], fallback: source-scoped canonical URL}
+        date_semantics: {displayed: none, first_seen: tracker discovery time}
+        expected_mime_types: [text/html]
+        language_behavior: English sitemap includes paired English/Hindi policy links where available.
+        refresh_policy: {weekly: compare link set, historical: not applicable}
+        completeness:
+          removal_authority: false
+          failure_indicators: [missing Site Map heading, missing navigation links, block page]
+        history: {boundary: current navigation only, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/site_map.html]
+        fixtures: [tests/fixtures/cerc/site_map.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_home
+        purpose: Discover current notices and publications before they reach dedicated collections.
+        url: https://cercind.gov.in/index-en.html
+        discovery_method: navigation
+        kind: rolling
+        decision: track
+        enumeration: {method: homepage bulletin plus view-all link, termination: current bulletin end}
+        identity: {native_ids: [href], fallback: source-scoped canonical URL}
+        date_semantics: {displayed: posted date where present, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing; linked files may include Hindi variants.
+        refresh_policy: {weekly: full current bulletin, historical: never infer removal from expiry}
+        completeness:
+          removal_authority: false
+          failure_indicators: [missing bulletin, malformed table, block page]
+        history: {boundary: homepage exposes 18 document links and view-all exposes 17 document links; rolling content includes persistent older resources, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/index-en.html, https://cercind.gov.in/site_map.html]
+        fixtures: [tests/fixtures/cerc/home_bulletin.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_draft_regulations
+        purpose: Track each draft matter and all documents, deadlines, hearings, comments, and presentations appended to it.
+        url: https://cercind.gov.in/Draft_reg.html
+        discovery_method: sitemap
+        kind: evolving_collection
+        decision: track
+        enumeration: {method: single year-grouped HTML table, termination: final historical row}
+        identity: {native_ids: [displayed serial number plus child href], fallback: matter row provenance plus source-scoped canonical URL}
+        date_semantics: {published: title or linked notice evidence, deadline: row text or linked notice evidence, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata is retained even when a linked file cannot be extracted.
+        refresh_policy: {weekly: full table and all active/current or prior-year rows, historical: quarterly full child-link comparison}
+        completeness:
+          removal_authority: true
+          failure_indicators: [missing Draft Regulation heading, missing year groups, unexpected empty table, malformed row, block page]
+        history: {boundary: serials 1 through 120 covering 2013 through 2026, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/Draft_reg.html, https://cercind.gov.in/site_map.html]
+        fixtures: [tests/fixtures/cerc/draft_regulations.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_current_regulations
+        purpose: Track final regulations and later Gazette, corrigendum, procedure, addendum, and statement-of-reasons files.
+        url: https://cercind.gov.in/Current_reg.html
+        discovery_method: sitemap
+        kind: evolving_collection
+        decision: track
+        enumeration: {method: year-grouped HTML table, termination: final historical row}
+        identity: {native_ids: [displayed serial number plus child href], fallback: matter row provenance plus source-scoped canonical URL}
+        date_semantics: {published: row or linked notice date, effective: regulation evidence, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata; record each linked language variant independently.
+        refresh_policy: {weekly: full table and current/prior-year child links, historical: quarterly full child-link comparison}
+        completeness:
+          removal_authority: true
+          failure_indicators: [missing regulation table, missing year groups, unexpected empty table, malformed row, block page]
+        history: {boundary: serials 1 through 208 covering 1999 through 2026, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/Current_reg.html, https://cercind.gov.in/site_map.html]
+        fixtures: [tests/fixtures/cerc/current_regulations.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_recent_orders
+        purpose: Capture all current-year Commission orders as routine records unless promoted by classification.
+        url: https://cercind.gov.in/recent_orders.html
+        discovery_method: sitemap
+        kind: rolling
+        decision: track
+        enumeration: {method: current-year HTML table, termination: table end}
+        identity: {native_ids: [petition number, order href], fallback: source-scoped canonical URL}
+        date_semantics: {published: order date, posted: posting date, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata; preserve records when linked file extraction fails.
+        refresh_policy: {weekly: full current year, historical: prior-year archive weekly and older archives quarterly}
+        completeness:
+          removal_authority: false
+          failure_indicators: [missing order table, unexpected empty current year, malformed row, block page]
+        history: {boundary: current-year serials 1 through 526; prior-year archives remain separate contracts, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/recent_orders.html, https://cercind.gov.in/site_map.html]
+        fixtures: [tests/fixtures/cerc/recent_orders.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_order_archives
+        purpose: Enumerate every prior-year Commission order rather than treating the current-year page as complete history.
+        url: https://cercind.gov.in/orders.html
+        discovery_method: sitemap
+        kind: authoritative_collection
+        decision: track
+        enumeration: {method: year index followed by every annual order page, termination: all 27 linked years exhausted}
+        identity: {native_ids: [archive year, petition number, order href], fallback: annual-page row provenance plus source-scoped canonical URL}
+        date_semantics: {published: order date, posted: posting date where present, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata; preserve records when a linked order is scanned or unreadable.
+        refresh_policy: {weekly: prior-year page, historical: quarterly full rescan of all annual pages}
+        completeness:
+          removal_authority: true
+          failure_indicators: [missing annual archive links, missing order table on a year page, malformed row, block page]
+        history: {boundary: 27 annual pages covering 1999 through 2025, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/orders.html, https://cercind.gov.in/Neworder1999.html, https://cercind.gov.in/recent_orders2025.html]
+        fixtures: [tests/fixtures/cerc/order_archives.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_recent_rops
+        purpose: Capture all current-year records of proceedings as routine records unless promoted by classification.
+        url: https://cercind.gov.in/recent_rops.html
+        discovery_method: sitemap
+        kind: rolling
+        decision: track
+        enumeration: {method: current-year HTML table, termination: table end}
+        identity: {native_ids: [petition number, ROP href], fallback: source-scoped canonical URL}
+        date_semantics: {published: proceeding date, posted: posting date, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata; preserve records when linked file extraction fails.
+        refresh_policy: {weekly: full current year, historical: prior-year archive weekly and older archives quarterly}
+        completeness:
+          removal_authority: false
+          failure_indicators: [missing ROP table, unexpected empty current year, malformed row, block page]
+        history: {boundary: current-year serials 1 through 1826; prior-year archives remain separate contracts, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/recent_rops.html, https://cercind.gov.in/site_map.html]
+        fixtures: [tests/fixtures/cerc/recent_rops.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_rop_archives
+        purpose: Enumerate every prior-year record of proceedings rather than treating the current-year page as complete history.
+        url: https://cercind.gov.in/record_proceeding.html
+        discovery_method: sitemap
+        kind: authoritative_collection
+        decision: track
+        enumeration: {method: year index followed by every annual ROP page, termination: all 18 linked years exhausted}
+        identity: {native_ids: [archive year, petition number, ROP href], fallback: annual-page row provenance plus source-scoped canonical URL}
+        date_semantics: {published: proceeding date, posted: posting date where present, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata; preserve records when a linked ROP is scanned or unreadable.
+        refresh_policy: {weekly: prior-year page, historical: quarterly full rescan of all annual pages}
+        completeness:
+          removal_authority: true
+          failure_indicators: [missing annual archive links, missing ROP table on a year page, malformed row, block page]
+        history: {boundary: 18 annual pages covering 2008 through 2025, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/record_proceeding.html, https://cercind.gov.in/Rop08.html, https://cercind.gov.in/recent_rops2025.html]
+        fixtures: [tests/fixtures/cerc/rop_archives.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_discussion_papers
+        purpose: Track discussion, consultation, and staff papers with later notices, extensions, comments, hearings, and presentations.
+        url: https://cercind.gov.in/Disc_Paper.html
+        discovery_method: sitemap
+        kind: evolving_collection
+        decision: track
+        enumeration: {method: single serial-numbered HTML table, termination: serial 1}
+        identity: {native_ids: [displayed serial number plus child href], fallback: matter row provenance plus source-scoped canonical URL}
+        date_semantics: {published: row or linked notice evidence, deadline: row text or linked notice evidence, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata is retained regardless of linked-file extractability.
+        refresh_policy: {weekly: full table and active/current or prior-year rows, historical: quarterly full child-link comparison}
+        completeness:
+          removal_authority: true
+          failure_indicators: [missing Discussion Paper heading, missing serial endpoints, malformed row, unexpected empty table, block page]
+        history: {boundary: serials 1 through 32, with serial 1 dating to 2013, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/Disc_Paper.html, https://cercind.gov.in/site_map.html]
+        fixtures: [tests/fixtures/cerc/discussion_papers.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_working_papers
+        purpose: Track Commission working papers as a collection distinct from discussion papers and study reports.
+        url: https://cercind.gov.in/Work_Paper.html
+        discovery_method: sitemap
+        kind: authoritative_collection
+        decision: track
+        enumeration: {method: single HTML table, termination: end of table}
+        identity: {native_ids: [document href], fallback: row provenance plus source-scoped canonical URL}
+        date_semantics: {published: title or linked-document evidence, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata is retained regardless of linked-file extractability.
+        refresh_policy: {weekly: full table, historical: full enumeration weekly}
+        completeness:
+          removal_authority: true
+          failure_indicators: [missing Working Paper heading, unexpected empty table, malformed row, block page]
+        history: {boundary: two working-paper documents published in January 2021, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/Work_Paper.html, https://cercind.gov.in/site_map.html]
+        fixtures: [tests/fixtures/cerc/working_papers.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_study_reports
+        purpose: Track CERC expert, committee, working-group, and power-system study reports.
+        url: https://cercind.gov.in/Study_Rep.html
+        discovery_method: sitemap
+        kind: authoritative_collection
+        decision: track
+        enumeration: {method: single HTML table, termination: end of table}
+        identity: {native_ids: [document href], fallback: source-scoped canonical URL}
+        date_semantics: {posted: displayed website-posting date, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata; preserve items if a linked report is scanned or unreadable.
+        refresh_policy: {weekly: full table, historical: full enumeration weekly}
+        completeness:
+          removal_authority: true
+          failure_indicators: [missing Study Reports heading, unexpected empty table, malformed row, block page]
+        history: {boundary: seven reports, oldest displayed posting date 09.04.2019, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/Study_Rep.html, https://cercind.gov.in/site_map.html]
+        fixtures: [tests/fixtures/cerc/study_reports.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_market_monitoring
+        purpose: Track every annual report of the CERC Market Monitoring Cell.
+        url: https://cercind.gov.in/report_MM.html
+        discovery_method: sitemap
+        kind: authoritative_collection
+        decision: track
+        enumeration: {method: annual-report links within the main content tables, termination: oldest listed reporting year}
+        identity: {native_ids: [reporting year, document href], fallback: source-scoped canonical URL}
+        date_semantics: {published: reporting period label, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata; retain records if a linked report is scanned or unreadable.
+        refresh_policy: {weekly: full report list, historical: full enumeration weekly}
+        completeness:
+          removal_authority: true
+          failure_indicators: [missing Market Monitoring heading, unexpected empty report list, malformed link, block page]
+        history: {boundary: 14 annual reports covering 2008-09 through 2021-22, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/market_monitoring.html, https://cercind.gov.in/report_MM.html, https://cercind.gov.in/site_map.html]
+        fixtures: [tests/fixtures/cerc/market_monitoring.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_annual_reports
+        purpose: Track every Commission annual report exposed by the publication collection.
+        url: https://cercind.gov.in/annual_report.html
+        discovery_method: sitemap
+        kind: authoritative_collection
+        decision: track
+        enumeration: {method: main-content reporting-year link list, termination: oldest listed report}
+        identity: {native_ids: [reporting year, document href], fallback: source-scoped canonical URL}
+        date_semantics: {published: reporting period label, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata; record a Hindi variant independently if one is later exposed.
+        refresh_policy: {weekly: full report list, historical: full enumeration weekly}
+        completeness:
+          removal_authority: true
+          failure_indicators: [missing Annual Report heading, unexpected empty report list, malformed link, block page]
+        history: {boundary: 18 reports from 1998-99 through 2024-25 with gaps in the displayed year sequence, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/annual_report.html, https://cercind.gov.in/site_map.html]
+        fixtures: [tests/fixtures/cerc/annual_reports.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_other_reports
+        purpose: Track reports published outside the Commission's study, market-monitoring, and annual-report collections.
+        url: https://cercind.gov.in/Other_Report.html
+        discovery_method: sitemap
+        kind: authoritative_collection
+        decision: track
+        enumeration: {method: single main-content report table, termination: end of table}
+        identity: {native_ids: [document href], fallback: row provenance plus source-scoped canonical URL}
+        date_semantics: {published: title or linked-document evidence, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata; retain records if a linked report is scanned or unreadable.
+        refresh_policy: {weekly: full table, historical: full enumeration weekly}
+        completeness:
+          removal_authority: true
+          failure_indicators: [missing Other Report heading, unexpected empty table, malformed link, block page]
+        history: {boundary: one expert-group report, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/Other_Report.html, https://cercind.gov.in/site_map.html]
+        fixtures: [tests/fixtures/cerc/other_reports.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_public_hearings
+        purpose: Track every public-hearing matter and all notices, rescheduling notices, comments, and participant documents attached to it.
+        url: https://cercind.gov.in/public.html
+        discovery_method: sitemap
+        kind: evolving_collection
+        decision: track
+        enumeration: {method: year-grouped main-content link list, termination: final historical matter and all child links}
+        identity: {native_ids: [matter text, child href], fallback: matter provenance plus source-scoped canonical URL}
+        date_semantics: {published: notice evidence, deadline: hearing date or linked notice evidence, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata; preserve every linked language or supporting-document variant.
+        refresh_policy: {weekly: full list and all current/prior-year child links, historical: quarterly full child-link comparison}
+        completeness:
+          removal_authority: true
+          failure_indicators: [missing Public Hearing heading, missing year groups, malformed link group, unexpected empty list, block page]
+        history: {boundary: 78 main-content document links with the oldest visible hearing in 2015, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/public.html, https://cercind.gov.in/site_map.html]
+        fixtures: [tests/fixtures/cerc/public_hearings.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_hearing_schedule
+        purpose: Track advance and weekly cause lists plus notices that alter scheduled hearing arrangements.
+        url: https://cercind.gov.in/Sched_hear.html
+        discovery_method: sitemap
+        kind: rolling
+        decision: track
+        enumeration: {method: current-year month-grouped link list, termination: end of oldest visible month}
+        identity: {native_ids: [document href], fallback: month group and link provenance plus source-scoped canonical URL}
+        date_semantics: {modified: displayed last-modified time, effective: schedule or notice text, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata; preserve files even when scanned or unreadable.
+        refresh_policy: {weekly: full current page, historical: preserve prior observations because the rolling page is not removal authority}
+        completeness:
+          removal_authority: false
+          failure_indicators: [missing Hearing Schedule heading, missing month groups, unexpected empty current year, block page]
+        history: {boundary: 21 current documents comprising one hearing-mode notice and advance and weekly lists for January through October 2026, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/Sched_hear.html, https://cercind.gov.in/site_map.html]
+        fixtures: [tests/fixtures/cerc/hearing_schedule.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_public_notices
+        purpose: Track general Commission public notices and circulars.
+        url: https://cercind.gov.in/public-notice.html
+        discovery_method: sitemap
+        kind: authoritative_collection
+        decision: track
+        enumeration: {method: single HTML table, termination: end of table}
+        identity: {native_ids: [document href], fallback: row provenance plus source-scoped canonical URL}
+        date_semantics: {published: displayed publication date, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata; retain records for every linked language variant.
+        refresh_policy: {weekly: full table, historical: full enumeration weekly}
+        completeness:
+          removal_authority: true
+          failure_indicators: [missing Public Notice heading, unexpected empty table, malformed row, block page]
+        history: {boundary: eleven visible matters from 2021 through 2026, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/public-notice.html, https://cercind.gov.in/site_map.html]
+        fixtures: [tests/fixtures/cerc/public_notices.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_statutory_public_notices
+        purpose: Track petition-specific statutory notices and paired English/Hindi newspaper files.
+        url: https://cercind.gov.in/SPN.html
+        discovery_method: sitemap
+        kind: authoritative_collection
+        decision: track
+        enumeration: {method: single HTML table, termination: end of table}
+        identity: {native_ids: [petition number plus child href], fallback: row provenance plus source-scoped canonical URL}
+        date_semantics: {published: displayed publication date, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: Each English and Hindi newspaper attachment is a distinct document on one petition matter.
+        refresh_policy: {weekly: full current table, historical: quarterly full child-link comparison}
+        completeness:
+          removal_authority: true
+          failure_indicators: [missing Statutory Public Notice heading, unexpected empty table, malformed row, block page]
+        history: {boundary: table reaches notices published in August 2019, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/SPN.html, https://cercind.gov.in/site_map.html]
+        fixtures: [tests/fixtures/cerc/statutory_public_notices.html]
+        verified: true
+        last_verified: '2026-10-22'
+      - id: cerc_statutory_advice
+        purpose: Track statutory advice and related Commission material sent to government.
+        url: https://cercind.gov.in/advice_gov.html
+        discovery_method: sitemap
+        kind: authoritative_collection
+        decision: track
+        enumeration: {method: single link list, termination: end of main content}
+        identity: {native_ids: [document href], fallback: source-scoped canonical URL}
+        date_semantics: {published: date embedded in link text, first_seen: tracker discovery time}
+        expected_mime_types: [text/html, application/pdf]
+        language_behavior: English listing metadata; retain records if linked file extraction fails.
+        refresh_policy: {weekly: full list, historical: full enumeration weekly}
+        completeness:
+          removal_authority: true
+          failure_indicators: [missing Advice to Government heading, unexpected empty list, block page]
+        history: {boundary: visible advice list reaches May 2010, boundary_verified: true}
+        evidence_urls: [https://cercind.gov.in/advice_gov.html, https://cercind.gov.in/site_map.html]
+        fixtures: [tests/fixtures/cerc/statutory_advice.html]
+        verified: true
+        last_verified: '2026-10-22'

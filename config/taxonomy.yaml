@@ -1,0 +1,51 @@
+schema_version: 1
+
+# Preliminary deterministic categories. Step 6 owns the tested production rules.
+categories:
+  action_required:
+    priority: 1
+    terms:
+      - consultation
+      - comments
+      - suggestions
+      - stakeholder
+      - submission
+      - inputs
+      - public hearing
+  rules_and_regulation:
+    priority: 2
+    terms:
+      - act
+      - rule
+      - regulation
+      - amendment
+      - gazette
+      - notification
+      - corrigendum
+      - statement of reasons
+  policy_and_direction:
+    priority: 3
+    terms:
+      - policy
+      - guideline
+      - procedure
+      - statutory advice
+      - direction
+      - order
+  research_and_reporting:
+    priority: 4
+    terms:
+      - report
+      - study
+      - discussion paper
+      - working paper
+      - annual
+      - monthly
+      - quarterly
+      - statistics
+      - index
+  routine:
+    priority: 5
+    terms:
+      - record of proceedings
+      - petition

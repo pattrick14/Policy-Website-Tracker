@@ -1,0 +1,65 @@
+{
+  "posts": [
+    {
+      "ID": 20509,
+      "post_date": "2025-08-21 16:03:17",
+      "post_modified": "2026-08-10 13:28:35",
+      "post_status": "publish",
+      "post_title": "Example Rajya Sabha question compilation",
+      "documents_category": [
+        {
+          "term_id": 524,
+          "slug": "rajya-sabha-parliament-questions-and-answer",
+          "parent": 107
+        },
+        {
+          "term_id": 107,
+          "slug": "reports",
+          "parent": 0
+        }
+      ]
+    },
+    {
+      "ID": 20411,
+      "post_date": "2025-08-21 15:24:04",
+      "post_modified": "2026-07-31 11:00:35",
+      "post_status": "publish",
+      "post_title": "Example Lok Sabha question compilation",
+      "documents_category": [
+        {
+          "term_id": 523,
+          "slug": "lok-sabha-parliament-questions-and-answer",
+          "parent": 107
+        },
+        {
+          "term_id": 107,
+          "slug": "reports",
+          "parent": 0
+        }
+      ]
+    },
+    {
+      "ID": 13652,
+      "post_date": "2025-06-28 14:10:18",
+      "post_modified": "2026-05-14 16:22:21",
+      "post_status": "publish",
+      "post_title": "Example annual report parent",
+      "documents_category": [
+        {
+          "term_id": 47,
+          "slug": "general-report",
+          "parent": 107
+        },
+        {
+          "term_id": 107,
+          "slug": "reports",
+          "parent": 0
+        }
+      ]
+    }
+  ],
+  "total_items": 9,
+  "total_pages": 1,
+  "current_page": 1,
+  "_fixture_note": "Excerpt: 3 of 9 posts from document_category=reports&limit=50&page=1"
+}

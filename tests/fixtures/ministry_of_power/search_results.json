@@ -1,0 +1,70 @@
+{
+  "data": [
+    {
+      "id": 25578,
+      "title": "Example whats_new publish result",
+      "type": "whats_new",
+      "post_status": "publish",
+      "publish_date": "September 25, 2026",
+      "link": "https://cms-powermin.digifootprint.gov.in/whats_new/example-slug/"
+    },
+    {
+      "id": 10951,
+      "title": "Example whats_new archive result",
+      "type": "whats_new",
+      "post_status": "archive",
+      "publish_date": "June 21, 2025",
+      "link": "https://cms-powermin.digifootprint.gov.in/?post_type=whats_new&p=10951"
+    },
+    {
+      "id": 25714,
+      "title": "Example central_documents publish result",
+      "type": "central_documents",
+      "post_status": "publish",
+      "publish_date": "October 22, 2026",
+      "link": "https://cms-powermin.digifootprint.gov.in/central_documents/example-slug/"
+    },
+    {
+      "id": 25539,
+      "title": "Example careers_post publish result",
+      "type": "careers_post",
+      "post_status": "publish",
+      "publish_date": "September 16, 2026",
+      "link": "https://cms-powermin.digifootprint.gov.in/careers_post/example-slug/"
+    },
+    {
+      "id": 21175,
+      "title": "Example documents archive result",
+      "type": "documents",
+      "post_status": "archive",
+      "publish_date": "November 10, 2025",
+      "link": "https://cms-powermin.digifootprint.gov.in/?post_type=documents&p=21175"
+    },
+    {
+      "id": 21173,
+      "title": "Example documents publish result",
+      "type": "documents",
+      "post_status": "publish",
+      "publish_date": "November 10, 2025",
+      "link": "https://cms-powermin.digifootprint.gov.in/documents/example-slug/"
+    },
+    {
+      "id": 20778,
+      "title": "Example careers_post archive result",
+      "type": "careers_post",
+      "post_status": "archive",
+      "publish_date": "August 22, 2025",
+      "link": "https://cms-powermin.digifootprint.gov.in/?post_type=careers_post&p=20778"
+    },
+    {
+      "id": 13161,
+      "title": "Example tenders_post archive result",
+      "type": "tenders_post",
+      "post_status": "archive",
+      "publish_date": "June 24, 2025",
+      "link": "https://cms-powermin.digifootprint.gov.in/?post_type=tenders_post&p=13161"
+    }
+  ],
+  "total_items": 650,
+  "_fixture_note": "Excerpt of custom/api/search?s=electricity%20act; one result per type/status; live data array had 650 entries"
+}

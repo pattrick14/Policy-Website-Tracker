@@ -1,0 +1,17 @@
+{
+  "posts": {
+    "ID": 5001,
+    "post_date": "2025-06-28 14:10:18",
+    "post_modified": "2026-05-14 16:22:21",
+    "post_title": "Annual Reports of the Ministry",
+    "post_slug": "annual-reports-year-wise",
+    "acf_data": {
+      "title": "Annual Reports of the Ministry",
+      "file": [
+        {"type": "PDF", "title": "2025-26", "external_link": "", "file": [5103]},
+        {"type": "PDF", "title": "2024-25", "external_link": "", "file": [5102]},
+        {"type": "PDF", "title": "2023-24", "external_link": "", "file": [5101]}
+      ]
+    }
+  }
+}

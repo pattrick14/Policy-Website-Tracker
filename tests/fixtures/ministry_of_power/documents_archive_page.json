@@ -1,0 +1,27 @@
+{
+  "posts": [
+    {
+      "ID": 13458,
+      "post_date": "2025-06-28 12:33:38",
+      "post_modified": "2025-11-10 16:08:02",
+      "post_status": "archive",
+      "post_title": "Example other important documents",
+      "documents_category": [
+        {
+          "term_id": 136,
+          "slug": "acts-and-policy",
+          "parent": 0
+        },
+        {
+          "term_id": 137,
+          "slug": "general_acts",
+          "parent": 136
+        }
+      ]
+    }
+  ],
+  "total_items": 2,
+  "total_pages": 2,
+  "current_page": 2,
+  "_fixture_note": "document_category=acts-and-policy&limit=1&page=2&post_status=archive"
+}

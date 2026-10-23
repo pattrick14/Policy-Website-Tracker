@@ -1,0 +1,22 @@
+{
+  "posts": [
+    {
+      "ID": 7001,
+      "post_date": "2025-11-10 15:40:04",
+      "post_modified": "2025-11-10 15:40:40",
+      "post_title": "Example national policy",
+      "post_slug": "example-national-policy",
+      "acf_data": {
+        "title": "Example national policy",
+        "date": "12/02/2005",
+        "file": [{"type": "PDF", "title": "", "external_link": "", "file": [6001]}]
+      },
+      "documents_category": [
+        {"term_id": 136, "name": "Acts and Policy", "slug": "acts-and-policy", "parent": 0}
+      ]
+    }
+  ],
+  "total_items": 7,
+  "total_pages": 4,
+  "current_page": 4
+}

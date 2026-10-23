@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Excerpt: 4 of 50 loc entries served at https://www.powermin.gov.in/sitemap.xml; all point at www.meity.gov.in -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+        <loc>https://www.meity.gov.in/</loc>
+    </url>
+    <url>
+        <loc>https://www.meity.gov.in/ministry</loc>
+    </url>
+    <url>
+        <loc>https://www.meity.gov.in/offerings</loc>
+    </url>
+    <url>
+        <loc>https://www.meity.gov.in/documents</loc>
+    </url>
+</urlset>
