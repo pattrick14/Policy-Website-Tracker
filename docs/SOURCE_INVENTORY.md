@@ -849,4 +849,4 @@ the accepted limit for seven never-fetched narrative pages.
 - [x] Language and date behavior is documented.
 - [x] Every discovered section has a track/indirect/exclude decision.
 - [x] `config/sources.yaml` contains only verified contracts.
-- [ ] Inventory reviewed before Step 2 begins.
+- [x] Inventory reviewed before Step 2 begins (user approval 2026-10-23).
