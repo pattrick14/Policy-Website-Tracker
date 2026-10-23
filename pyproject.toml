@@ -14,6 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
+policy-tracker = "policy_tracker.operations.cli:main"
 policy-tracker-inventory = "policy_tracker.inventory:main"
 
 [project.optional-dependencies]

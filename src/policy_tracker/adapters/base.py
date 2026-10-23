@@ -7,8 +7,9 @@ and production applies the per-site fetch policy.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Mapping, Protocol
+from typing import Protocol
 
 from policy_tracker.core.contracts import FeedContract
 from policy_tracker.core.observations import FeedObservation

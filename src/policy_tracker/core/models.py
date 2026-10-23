@@ -7,10 +7,9 @@ Every record is an immutable dataclass. Serialized forms carry
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Mapping
-
 
 SCHEMA_VERSION = 1
 

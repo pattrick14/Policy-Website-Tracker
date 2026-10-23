@@ -14,7 +14,6 @@ from urllib.parse import quote, urljoin, urlsplit, urlunsplit
 
 from policy_tracker.core.models import EntityKind, Provenance
 
-
 _DEFAULT_PORTS = {"http": 80, "https": 443}
 _UNSAFE_PATH_CHARS = re.compile(r"[^A-Za-z0-9\-._~!$&'()*+,;=:@/%]")
 

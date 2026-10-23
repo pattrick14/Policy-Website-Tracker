@@ -1,7 +1,8 @@
 # Architecture Context
 
-> This document records the approved target architecture. No runtime components
-> have been implemented yet.
+> This document records the approved target architecture. Step 2 implemented the
+> `core/` contracts, state engine, store, and CLI; adapters, documents,
+> reporting, and delivery follow in Steps 3–7.
 
 ## Component flow
 

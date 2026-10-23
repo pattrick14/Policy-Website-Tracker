@@ -6,8 +6,8 @@ Last updated: 2026-10-23
 
 - Planning: complete.
 - Repository documentation scaffold: complete.
-- Runtime implementation: not started (correctly blocked until Step 1 completes).
-- Source inventory: all three sites `research_status: complete`; the strict gate passes. Awaiting user review before Step 2.
+- Runtime implementation: Step 2 core contracts, state engine, store, and CLI complete; no source adapters yet.
+- Source inventory: all three sites `research_status: complete`; the strict gate passes; reviewed and approved by the user on 2026-10-23.
 - Tests and fixtures: Step 1 validator/probe tests and sanitized representative fixtures, all listed in `tests/fixtures/README.md`.
 - Git repository: initialized locally on `main`; `origin` set to `pattrick14/policy-website-tracker` (not yet pushed or verified).
 
@@ -15,21 +15,23 @@ Last updated: 2026-10-23
 
 | Step | Status | Notes |
 |---|---|---|
-| 1. Website research and repository bootstrap | Complete, pending user review | All three sites complete; strict gate passes. See the final handoff section. |
-| 2. Core contracts and state engine | Blocked on inventory review | Start once the user has reviewed the Step 1 inventory. |
-| 3. Ministry of Power adapter | Not started | Depends on Step 2. |
-| 4. Ministry of Coal adapter | Not started | Depends on Step 2. |
-| 5. CERC adapter | Not started | Depends on Step 2. |
+| 1. Website research and repository bootstrap | Complete | Inventory approved by the user on 2026-10-23. |
+| 2. Core contracts and state engine | Complete | Contracts frozen; see the Step 2 handoff at the end. |
+| 3. Ministry of Power adapter | Ready to start | Step 2 contracts are merged; Steps 3–5 may run in parallel. |
+| 4. Ministry of Coal adapter | Ready to start | Step 2 contracts are merged; Steps 3–5 may run in parallel. |
+| 5. CERC adapter | Ready to start | Step 2 contracts are merged; Steps 3–5 may run in parallel. |
 | 6. Enrichment and digest generation | Not started | Depends on adapters. |
 | 7. GitHub and SMTP operations | Not started | Depends on complete digest pipeline. |
 | 8. Acceptance and adversarial review | Not started | Final gate. |
 
 ## Exact next task
 
-The user reviews the Step 1 inventory (`docs/SOURCE_INVENTORY.md`,
-`config/sources.yaml`, `docs/DECISIONS.md`). After approval, tick the last
-checklist item in `docs/SOURCE_INVENTORY.md` and begin Step 2 (core contracts
-and state engine) per `docs/PROJECT_PLAN.md`.
+Start Steps 3–5 (the three source adapters), which may run in parallel. Each
+adapter implements `policy_tracker.adapters.base.Adapter`, registers in
+`policy_tracker.adapters.registry`, and is tested against the sanitized
+fixtures. Step 3 also provides the production HTTP fetcher (the CLI's default
+fetcher is a placeholder returning `no_fetcher`). Follow the Step 2 handoff at
+the end of this file.
 
 ## Step 1 exit evidence
 
@@ -432,9 +434,9 @@ Step 2 stays blocked until Coal is complete and the inventory is reviewed.
 - `tests/fixtures/cerc/non_feed_pages.html` still holds escalation and
   coal-price excerpts from before D-018. They are harmless and can be trimmed.
 
-## Authoritative handoff — 2026-10-23 (Step 1 complete, awaiting review)
+## Handoff — 2026-10-23 (Step 1 complete; superseded)
 
-This section supersedes every earlier handoff and "exact next action" above.
+Superseded by the Step 2 handoff below; kept for history.
 
 - D-021 (user-confirmed): the Coal Gasification mission page is `indirect`.
   The `coal_gasification` feed was removed; What's New captures its
@@ -456,3 +458,56 @@ notes in the two earlier handoffs above (unschematized keys, fault-case tests,
 Coal identity rules for mixed-scheme and doubled-slash coal.gov.in hrefs, and a
 note that full Coal enumeration costs about 90 requests, roughly 6 minutes at
 0.25 req/s) still apply.
+
+## Authoritative handoff — 2026-10-23 (Step 2 complete)
+
+This section supersedes every earlier handoff and "exact next action" above.
+The user approved the Step 1 inventory on 2026-10-23.
+
+### Delivered
+
+- **Frozen contracts:** `core/models.py` (versioned records, `SCHEMA_VERSION`
+  1), `core/observations.py` (adapter output plus completeness evidence),
+  `core/contracts.py` (`FeedContract`, `FetchPolicy`, `RunContext`),
+  `core/identity.py` (native ID, then canonical URL, then provenance hash), and
+  `adapters/base.py` (`Adapter`, `Fetcher`, `AdapterRegistry`).
+- **Config (D-022):** `core/config.py` loads 54 tracked feeds into typed
+  contracts. The inventory schema is closed and types every formerly
+  unschematized key. Only tested host mirrors alias to a canonical host, so
+  coal.gov.in file hrefs keep their raw identity.
+- **Engine (D-023):** `core/engine.py` is pure. It covers per-feed silent
+  baselines, backfill by `coverage_revision`, appearances, two-run removal on
+  authoritative feeds only, reappearance, quarantine (block page, parse, fetch,
+  MIME, collapse, unexpected empty, stale), parser migrations, and
+  deterministic event ids. See `docs/STATE_ENGINE.md`.
+- **Persistence:** `core/serialize.py` and `core/migrations.py` provide
+  deterministic JSON and a versioned migration registry. `operations/store.py`
+  implements the tracker-data layout with atomic writes and compare-and-swap
+  promotion. See `docs/DATA_LAYOUT.md`.
+- **Operations:** `operations/runner.py` applies feeds live-first and records
+  rebaseline reasons in the run manifest. `operations/cli.py` provides
+  `policy-tracker validate-config | init-data | baseline | run [--dry-run] |
+  rebaseline-feed`. `_stage_delivery()` is the seam for the Step 7 outbox.
+
+### Validation
+
+- `python -m pytest -q`: 419 passed.
+- `ruff check src tests`: clean.
+- `policy-tracker validate-config --config config/sources.yaml`: valid, 54
+  tracked feeds. The strict inventory gate passes.
+- Smoke test: `init-data`, then `run --dry-run`; every feed fails as
+  `no_adapter` and nothing is promoted, as expected before Steps 3–5.
+
+### Notes for Steps 3–5
+
+- Adapters must emit ISO 8601 UTC `observed_at` in one format; the engine's
+  stale-observation guard compares the strings.
+- Report fetch, parse, block-page, MIME, and pagination evidence separately,
+  and set `enumeration_complete` only when the contract's termination rule is
+  met.
+- Set `ObservedDocument.matter_native_id` only on explicit source evidence, and
+  `section` for current/archive passes so moves are status changes.
+- The fetcher must apply `FetchPolicy` (Coal 0.25 req/s and CAPTCHA detection,
+  CERC D-020 fallback and circuit breaker) and needs recorded fault cases in
+  its tests.
+- A parser change bumps the feed's `parser_version` in config.
