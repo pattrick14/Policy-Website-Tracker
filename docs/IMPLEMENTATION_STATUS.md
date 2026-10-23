@@ -1,21 +1,21 @@
 # Implementation Status
 
-Last updated: 2026-10-22
+Last updated: 2026-10-23
 
 ## Current state
 
 - Planning: complete.
 - Repository documentation scaffold: complete.
 - Runtime implementation: not started (correctly blocked until Step 1 completes).
-- Source inventory: preliminary; site-level coverage decisions merged for Ministry of Power and Ministry of Coal, CERC pending (see the authoritative pause handoff at the end).
-- Tests and fixtures: Step 1 validator/probe tests and 67 sanitized representative fixtures on disk (CERC additions not yet listed in the fixture README).
+- Source inventory: Ministry of Power and CERC `research_status: complete`; Ministry of Coal preliminary pending its CAPTCHA-blocked re-verification (see the 2026-10-23 handoff at the end).
+- Tests and fixtures: Step 1 validator/probe tests and sanitized representative fixtures, all listed in `tests/fixtures/README.md`.
 - Git repository: initialized locally on `main`; `origin` set to `pattrick14/policy-website-tracker` (not yet pushed or verified).
 
 ## Step status
 
 | Step | Status | Notes |
 |---|---|---|
-| 1. Website research and repository bootstrap | In progress | Coverage decisions merged for MoP and Coal; CERC merge, Coal CAPTCHA-blocked re-verification, and the MoP Citizen Engagement check remain. See the final handoff section. |
+| 1. Website research and repository bootstrap | In progress | MoP and CERC complete; only the Coal re-verification remains. See the final handoff section. |
 | 2. Core contracts and state engine | Blocked by Step 1 | Do not start until inventory review gate passes. |
 | 3. Ministry of Power adapter | Not started | Depends on Step 2. |
 | 4. Ministry of Coal adapter | Not started | Depends on Step 2. |
@@ -26,10 +26,9 @@ Last updated: 2026-10-22
 
 ## Exact next task
 
-Follow "Authoritative pause handoff — 2026-10-22 (site-level coverage review)"
-at the end of this file. Start with the CERC merge from `docs/step1_pending/`,
-then the Coal re-verification once its CAPTCHA block clears, then the Ministry
-of Power Citizen Engagement check.
+Follow "Authoritative handoff — 2026-10-23 (CERC merged)" at the end of this
+file: finish the Ministry of Coal re-verification, then mark Coal complete and
+pass the strict gate.
 
 ## Step 1 exit evidence
 
@@ -260,9 +259,9 @@ preliminary/candidate notes; then rerun tests plus structural and strict
 inventory validation. Do not set `research_status: complete` or begin Step 2
 until that review is defensible and `--require-complete` passes.
 
-## Authoritative pause handoff — 2026-10-22 (site-level coverage review)
+## Pause handoff — 2026-10-22 (site-level coverage review, superseded)
 
-This section supersedes every earlier handoff and "exact next action" above.
+Superseded by the 2026-10-23 handoff below; kept for history.
 
 ### Decisions made this session (all user-confirmed, see `docs/DECISIONS.md`)
 
@@ -366,3 +365,68 @@ This section supersedes every earlier handoff and "exact next action" above.
 
 Step 2 remains blocked until the strict gate passes and the inventory is
 reviewed.
+
+## Authoritative handoff — 2026-10-23 (CERC merged)
+
+This section supersedes every earlier handoff and "exact next action" above.
+
+### Completed
+
+- CERC merged into `config/sources.yaml`: six D-018 feeds
+  (`cerc_commission_minutes`, `cerc_cac_minutes`, `cerc_other_meeting_minutes`,
+  `cerc_coordination_forum_minutes`, `cerc_price_indices`,
+  `cerc_escalation_rates`), their `required_feed_ids` (25 in total), the
+  21-entry `coverage_decisions` list revised for D-018/D-019, and the D-020
+  site-level host-fallback keys. CERC is now `research_status: complete`.
+- The CERC inventory section, fixture README rows, and D-020 were already in
+  the docs. The merged `docs/step1_pending/cerc_*` fragments are deleted.
+- The Ministry of Power Citizen Engagement check was resolved earlier
+  (`docs/SOURCE_INVENTORY.md`, "Citizen Engagement resolution"), and Ministry
+  of Power is `research_status: complete`.
+
+### Validation results
+
+- `python -m pytest`: 9 passed (the two CERC KeyError failures are cleared).
+- `PYTHONPATH=src python -m policy_tracker.inventory config/sources.yaml`: valid.
+- The same command with `--require-complete` fails only with
+  `sites[1].research_status: research gate requires 'complete'` (Ministry of
+  Coal).
+
+### Remaining blocker: Ministry of Coal
+
+Blocker 2 in the 2026-10-22 handoff is out of date. Two re-verification passes
+earlier on 2026-10-23 (75 requests, no CAPTCHA) verified `coal_auction_allotment`
+and `coal_minutes_of_meetings`, along with archives, pagers, Hindi, and search.
+Those results are already in the `ministry_of_coal` block; see
+`docs/step1_pending/coal_reverification.md`. What remains:
+
+1. **A product decision on `coal_gasification`.** The pass found that
+   `/major-statistics/national-coal-gasification-mission` is an active scheme
+   dossier (59 rows, RFPs dated 13.08.2026), and added it as a tracked,
+   verified feed. Either record it as a decision (track, consistent with D-015)
+   or revert it to `indirect`; the revert steps are in `coal_reverification.md`.
+2. Record the seven never-fetched safety and SDC narrative pages as an accepted
+   coverage limit. They are already listed as such in `coal_reverification.md`.
+3. Merge that file's SOURCE_INVENTORY replacement text and fixture README rows.
+   Then set Coal `research_status: complete`, delete `docs/step1_pending/`,
+   rerun the three validation commands, and tick the checklist in
+   `docs/SOURCE_INVENTORY.md`.
+
+A live probe on 2026-10-23 at 12:25 IST could not reach `www.coal.nic.in`: the
+cloud environment's egress proxy refused the tunnel (HTTP 403). That is the
+environment's network policy, not the site's CAPTCHA. Any further live Coal
+check needs that host added to the environment's allowed domains.
+
+Step 2 stays blocked until Coal is complete and the inventory is reviewed.
+
+### Notes for Step 2 (additional)
+
+- Formalize the D-020 site-level keys (`rate_limit_shared_across_hosts`,
+  `canonical_host`, `fallback_hosts`, `host_fallback_on`,
+  `max_attempts_per_url`, `retry_backoff_seconds`,
+  `abort_after_consecutive_failed_urls`, and the site-level
+  `request_timeout_seconds`) alongside the keys already listed above.
+- Step 3 fetcher tests need recorded fault cases for each D-020 fallback
+  trigger. The empty-reply trigger was observed only on 2026-10-22.
+- `tests/fixtures/cerc/non_feed_pages.html` still holds escalation and
+  coal-price excerpts from before D-018. They are harmless and can be trimmed.

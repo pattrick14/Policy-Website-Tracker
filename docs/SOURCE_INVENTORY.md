@@ -699,13 +699,10 @@ tracked and explain whether they are generic content, independently irrelevant,
 duplicated by another feed, or external to the three-site boundary. Do not treat
 the examples in this document as a complete exclusion decision.
 
-Status at pause: the validator now requires structured site-level coverage
-decisions, but the three `coverage_decisions` lists have not yet been added to
-`config/sources.yaml`. Ministry of Power still needs a decision for the Press
-Release taxonomy root and a documented response to its unusable cross-site XML
-sitemap. Coal and CERC need their non-feed sitemap branches grouped into tracked,
-indirect, excluded-generic, and excluded-external decisions. Do not change any
-site status to complete until those lists and their evidence are reviewed.
+Status (2026-10-23): all three sites carry structured `coverage_decisions` in
+`config/sources.yaml`, and each site section above lists them with evidence.
+Ministry of Power and CERC are `research_status: complete`. Ministry of Coal
+stays `preliminary` until its CAPTCHA-blocked open verification (above) is done.
 
 ## Completion checklist
 
