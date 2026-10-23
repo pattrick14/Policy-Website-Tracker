@@ -1,0 +1,48 @@
+{
+  "posts": [
+    {
+      "ID": 9003,
+      "post_date": "2026-10-21 12:05:00",
+      "post_modified": "2026-10-21 12:05:01",
+      "post_title": "Example draft guidelines for comments",
+      "post_slug": "example-draft-guidelines-comments",
+      "menu_order": 667,
+      "acf_data": {
+        "type": "PDF",
+        "file": [
+          8003
+        ]
+      }
+    },
+    {
+      "ID": 9002,
+      "post_date": "2026-10-07 17:28:11",
+      "post_modified": "2026-10-07 17:28:12",
+      "post_title": "Example amendment rules",
+      "post_slug": "example-amendment-rules",
+      "menu_order": 666,
+      "acf_data": {
+        "type": "PDF",
+        "file": [
+          8002
+        ]
+      }
+    },
+    {
+      "ID": 9001,
+      "post_date": "2026-07-28 17:48:22",
+      "post_modified": "2026-07-28 17:48:22",
+      "post_title": "Inviting comments on example draft rules",
+      "post_slug": "inviting-comments-example-draft-rules",
+      "menu_order": 661,
+      "acf_data": {
+        "type": "PDF",
+        "file": [
+          8001
+        ]
+      }
+    }
+  ],
+  "total_items": 3,
+  "_fixture_note": "Adapter fixture variant: adapter_whats_new.json after a new post 9003"
+}

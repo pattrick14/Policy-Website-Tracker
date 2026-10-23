@@ -29,6 +29,7 @@ plan where applicable.
 | D-021 | Ministry of Coal "Coal Gasification" mission page receives indirect coverage only; What's New captures its announcements. | Accepted |
 | D-022 | Feed configuration is a closed schema; tracked feeds load into typed contracts whose host rules alias only tested host mirrors to the site's canonical host, and Coal collapses duplicated path slashes on those hosts. | Accepted |
 | D-023 | State-engine semantics: one owning feed per record sets its metadata, removal counters ignore replays and stale observations, parser migrations apply silently, and event ids identify semantic changes. Feeds run live-first in feed-id order. | Accepted |
+| D-024 | Production fetching uses one policy-enforcing HttpFetcher per site (allowlist, public-IP and per-hop redirect checks, streamed size cap, rate limit, D-020 fallback and breaker); adapters detect block pages by content. | Accepted |
 
 ### D-013 — Exclude Ministry of Power press releases and Parliament questions
 
@@ -192,6 +193,27 @@ plan where applicable.
 - Compatibility or migration impact: None; no state exists yet. A rebaseline
   reason has no state field and is recorded in the run manifest instead.
   See `docs/STATE_ENGINE.md`.
+- Supersedes: None.
+
+### D-024 — Policy-enforcing HTTP fetcher and block-page detection
+
+- Date: 2026-10-23
+- Status: Accepted (Step 3 engineering decision)
+- Decision: `adapters/http.HttpFetcher` is the only production fetcher.
+  `fetcher_for` shares one instance per site, so the rate limit, failure count,
+  and circuit breaker are site-level for a whole run. Redirects are followed
+  manually, and every hop must be an allowed host resolving only to globally
+  routable addresses. Any HTTP status (304, 404, 5xx) is returned unchanged and
+  resets the failure count; only network-class errors count toward the
+  breaker, and policy refusals never retry or count. When local DNS fails and
+  an environment proxy carries the request, the proxy's resolution is trusted.
+  Adapters call `adapters/blocks.detect_block_page` on listing responses and
+  report hits as block-page evidence.
+- Rationale: PROJECT_PLAN retrieval limits, D-017, and D-020. Keeping body
+  inspection out of the fetcher keeps "block pages never trigger fallback"
+  explicit.
+- Compatibility or migration impact: None. Error strings are listed in
+  `docs/FETCHING.md` and appear in run-health output.
 - Supersedes: None.
 
 ## Decision template

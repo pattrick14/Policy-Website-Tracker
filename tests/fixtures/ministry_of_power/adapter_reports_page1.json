@@ -1,0 +1,134 @@
+{
+  "posts": [
+    {
+      "ID": 20509,
+      "post_date": "2025-08-21 16:03:17",
+      "post_modified": "2026-08-10 13:28:35",
+      "post_status": "publish",
+      "post_title": "Example Rajya Sabha question compilation",
+      "post_slug": "example-rajya-sabha-question-compilation",
+      "acf_data": {
+        "title": "Example Rajya Sabha question compilation",
+        "date": "",
+        "file": [
+          {
+            "type": "PDF",
+            "title": "Session 1",
+            "external_link": "",
+            "file": [
+              8201
+            ]
+          },
+          {
+            "type": "PDF",
+            "title": "Session 2",
+            "external_link": "",
+            "file": [
+              8202
+            ]
+          }
+        ]
+      },
+      "documents_category": [
+        {
+          "term_id": 524,
+          "slug": "rajya-sabha-parliament-questions-and-answer",
+          "parent": 107
+        },
+        {
+          "term_id": 107,
+          "slug": "reports",
+          "parent": 0
+        }
+      ]
+    },
+    {
+      "ID": 20411,
+      "post_date": "2025-08-21 15:24:04",
+      "post_modified": "2026-07-31 11:00:35",
+      "post_status": "publish",
+      "post_title": "Example Lok Sabha question compilation",
+      "post_slug": "example-lok-sabha-question-compilation",
+      "acf_data": {
+        "title": "Example Lok Sabha question compilation",
+        "date": "21/08/2025",
+        "file": [
+          {
+            "type": "PDF",
+            "title": "",
+            "external_link": "",
+            "file": [
+              8203
+            ]
+          }
+        ]
+      },
+      "documents_category": [
+        {
+          "term_id": 523,
+          "slug": "lok-sabha-parliament-questions-and-answer",
+          "parent": 107
+        },
+        {
+          "term_id": 107,
+          "slug": "reports",
+          "parent": 0
+        }
+      ]
+    },
+    {
+      "ID": 13652,
+      "post_date": "2025-06-28 14:10:18",
+      "post_modified": "2026-05-14 16:22:21",
+      "post_status": "publish",
+      "post_title": "Example annual report parent",
+      "post_slug": "example-annual-report-parent",
+      "acf_data": {
+        "title": "Example annual report parent",
+        "date": "",
+        "file": [
+          {
+            "type": "PDF",
+            "title": "2025-26",
+            "external_link": "",
+            "file": [
+              5103
+            ]
+          },
+          {
+            "type": "PDF",
+            "title": "2024-25",
+            "external_link": "",
+            "file": [
+              5102
+            ]
+          },
+          {
+            "type": "PDF",
+            "title": "2023-24",
+            "external_link": "",
+            "file": [
+              5101
+            ]
+          }
+        ]
+      },
+      "documents_category": [
+        {
+          "term_id": 47,
+          "slug": "general-report",
+          "parent": 107
+        },
+        {
+          "term_id": 107,
+          "slug": "reports",
+          "parent": 0
+        }
+      ]
+    }
+  ],
+  "total_items": 3,
+  "total_pages": 1,
+  "current_page": 1,
+  "_fixture_note": "Adapter fixture: document_category=reports&limit=50&page=1; posts from documents_root_child_terms.json with synthetic acf_data; totals reduced to 3"
+}

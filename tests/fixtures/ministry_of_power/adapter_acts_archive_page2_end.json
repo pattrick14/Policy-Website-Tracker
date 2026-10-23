@@ -1,0 +1,7 @@
+{
+  "posts": [],
+  "total_items": 2,
+  "total_pages": 1,
+  "current_page": 2,
+  "_fixture_note": "Empty page after documents_archive_status.json (limit=50&page=2&post_status=archive)"
+}

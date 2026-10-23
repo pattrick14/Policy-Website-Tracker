@@ -60,6 +60,19 @@ Current provenance:
 | `ministry_of_power/sitemap_misconfigured.xml` | `https://www.powermin.gov.in/sitemap.xml` | 2026-10-22 | Valid sitemap XML whose entries all point at `www.meity.gov.in` (4 of 50 kept) |
 | `ministry_of_power/home_shell.html` | `https://www.powermin.gov.in/` | 2026-10-22 | Client-rendered Next.js shell with empty `__NEXT_DATA__` page props and no navigation links (beacon and chatbot scripts removed) |
 | `ministry_of_power/citizen_engagement_page.json` | `/cms/wp-json/wp/v2/pages?slug=public-consultation&acf_format=standard` | 2026-10-23 | Citizen Engagement backing page: Citizen Charter title and a one-entry PDF repeat list (no consultations) |
+| `ministry_of_power/adapter_taxonomy.json` | Synthetic adapter fixture (`/cms/wp-json/...` shapes) | 2026-10-23 | Taxonomy (`taxonomy_full.json` shape) with counts reduced to match the adapter_* pages |
+| `ministry_of_power/adapter_reports_page1.json` | Synthetic adapter fixture (`/cms/wp-json/...` shapes) | 2026-10-23 | Reports page 1 (limit 50): three posts carrying child terms with synthetic ACF file groups |
+| `ministry_of_power/adapter_reports_page2_end.json` | Synthetic adapter fixture (`/cms/wp-json/...` shapes) | 2026-10-23 | Reports empty terminus page after `total_pages` |
+| `ministry_of_power/adapter_acts_page1.json` | Synthetic adapter fixture (`/cms/wp-json/...` shapes) | 2026-10-23 | Acts and Policy page 1: a single-file parent and a multi-group parent with an external link |
+| `ministry_of_power/adapter_acts_page1_new_attachment.json` | Synthetic adapter fixture (`/cms/wp-json/...` shapes) | 2026-10-23 | Variant of `adapter_acts_page1.json` where parent 7002 gains attachment 6013 (live new-document test) |
+| `ministry_of_power/adapter_acts_page2_end.json` | Synthetic adapter fixture (`/cms/wp-json/...` shapes) | 2026-10-23 | Acts and Policy empty terminus page |
+| `ministry_of_power/adapter_acts_archive_limit1_page1.json` | Synthetic adapter fixture (`/cms/wp-json/...` shapes) | 2026-10-23 | Archive pass at limit 1, page 1 (precedes `documents_archive_page.json`) |
+| `ministry_of_power/adapter_acts_archive_page2_end.json` | Synthetic adapter fixture (`/cms/wp-json/...` shapes) | 2026-10-23 | Archive pass empty terminus page |
+| `ministry_of_power/adapter_orders_page1.json` | Synthetic adapter fixture (`/cms/wp-json/...` shapes) | 2026-10-23 | Orders and Notices page 1 |
+| `ministry_of_power/adapter_orders_page2_end.json` | Synthetic adapter fixture (`/cms/wp-json/...` shapes) | 2026-10-23 | Orders and Notices empty terminus page |
+| `ministry_of_power/adapter_whats_new.json` | Synthetic adapter fixture (`/cms/wp-json/...` shapes) | 2026-10-23 | What's New response whose `total_items` equals the post count (complete enumeration) |
+| `ministry_of_power/adapter_whats_new_archive.json` | Synthetic adapter fixture (`/cms/wp-json/...` shapes) | 2026-10-23 | What's New archive response whose `total_items` equals the post count |
+| `ministry_of_power/adapter_whats_new_added.json` | Synthetic adapter fixture (`/cms/wp-json/...` shapes) | 2026-10-23 | What's New with a new post 9003 (live new-matter test) |
 | `ministry_of_coal/minutes_of_meetings.html` | `/public-information/minutes-metings` | 2026-10-22 | General minutes table distinct from SLC, overlapping SLC notice row, and an archive link absent from the sitemap |
 | `ministry_of_coal/auction_allotment.html` | `/nominated-authority/auction-allotment` | 2026-10-22 | Leading statistics table before the document table, nine-page pager whose Last page link is `?page=8`, and a double-slash HTTP archive link |
 | `ministry_of_coal/review_minutes_table.html` | `/nominated-authority/production-reviews` and `/operationalisation-reviews` | 2026-10-22 | Narrative page plus a review-minutes table whose `http://coal.gov.in` upload folder does not match the meeting date |

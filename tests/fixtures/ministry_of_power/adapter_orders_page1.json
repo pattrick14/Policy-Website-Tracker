@@ -1,0 +1,42 @@
+{
+  "posts": [
+    {
+      "ID": 7101,
+      "post_date": "2025-12-01 12:00:00",
+      "post_modified": "2025-12-01 12:00:05",
+      "post_status": "publish",
+      "post_title": "Example office order",
+      "post_slug": "example-office-order",
+      "acf_data": {
+        "title": "Example office order",
+        "date": "01/12/2025",
+        "file": [
+          {
+            "type": "PDF",
+            "title": "",
+            "external_link": "",
+            "file": [
+              6101
+            ]
+          }
+        ]
+      },
+      "documents_category": [
+        {
+          "term_id": 140,
+          "slug": "orders-and-notices",
+          "parent": 0
+        },
+        {
+          "term_id": 141,
+          "slug": "general_orders",
+          "parent": 140
+        }
+      ]
+    }
+  ],
+  "total_items": 1,
+  "total_pages": 1,
+  "current_page": 1,
+  "_fixture_note": "Adapter fixture: document_category=orders-and-notices&limit=50&page=1 (synthetic)"
+}
