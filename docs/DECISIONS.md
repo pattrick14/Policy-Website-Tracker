@@ -26,6 +26,14 @@ plan where applicable.
 | D-018 | CERC meeting minutes (Commission, Central Advisory Committee, other meetings, Coordination Forum) and Commission-notified tariff inputs (coal price indices/CIL notifications and escalation rates) are tracked feeds. | Accepted |
 | D-019 | CERC repealed regulations, homepage annual archives, technical-validation letters, and dormant regulatory-affairs correspondence are excluded as independent feeds. | Accepted |
 | D-020 | CERC fetching uses a 120 s timeout, apex-to-www host fallback on connection-level failures, bounded retries, a run-level circuit breaker, and canonical-host identity. | Accepted |
+| D-021 | Ministry of Coal "Coal Gasification" mission page receives indirect coverage only; What's New captures its announcements. | Accepted |
+| D-022 | Feed configuration is a closed schema; tracked feeds load into typed contracts whose host rules alias only tested host mirrors to the site's canonical host, and Coal collapses duplicated path slashes on those hosts. | Accepted |
+| D-023 | State-engine semantics: one owning feed per record sets its metadata, removal counters ignore replays and stale observations, parser migrations apply silently, and event ids identify semantic changes. Feeds run live-first in feed-id order. | Accepted |
+| D-024 | Production fetching uses one policy-enforcing HttpFetcher per site (allowlist, public-IP and per-hop redirect checks, streamed size cap, rate limit, D-020 fallback and breaker); adapters detect block pages by content. | Accepted |
+| D-025 | Adapter identity rules: CERC documents are keyed by canonical URL with row-level matter ids; Coal linkless rows use a content hash; MoP documents are attachment ids resolved to files at enrichment; an undated sighting never clears a known date. | Accepted |
+| D-026 | Deadlines read numeric dates as DD/MM, flag ambiguous dates without a date, let a stated extension replace earlier dates, and report a change only for records and feeds that existed before the run; classification is rule-based from config/taxonomy.yaml. | Accepted |
+| D-027 | Delivery uses a per-run outbox bundle, Message-ID `<run_id.digest.policy-tracker@domain>`, compare-and-swap pushes to `tracker-data`, a pending delivery that blocks new crawls until sent or explicitly abandoned, and a workflow `mode` input for the silent baseline. | Accepted |
+| D-028 | Each run rechecks a rotating batch of already-hashed documents (least recently verified first, `TRACKER_REVALIDATE_DOCUMENTS`, default 150) in addition to event-touched and unhashed ones. | Accepted |
 
 ### D-013 — Exclude Ministry of Power press releases and Parliament questions
 
@@ -110,6 +118,205 @@ plan where applicable.
   `retry_backoff_seconds`, `abort_after_consecutive_failed_urls`,
   `rate_limit_shared_across_hosts`) to the contract schema. Feed URLs stay on
   the apex host.
+- Supersedes: None.
+
+### D-021 — Coal Gasification mission page is indirect
+
+- Date: 2026-10-23
+- Status: Accepted (confirmed by the user)
+- Decision: The Ministry of Coal Coal Gasification page
+  (`/major-statistics/national-coal-gasification-mission`) is not a tracked
+  feed. It receives indirect coverage in the narrative and thematic pages group
+  (sitemap link-set comparison). Its announcements are captured through the
+  tracked What's New feed (`coal_whats_new`) under D-001.
+- Rationale: The 2026-10-23 re-verification found that the page is an active
+  scheme dossier, not a static narrative page, and proposed tracking it. The
+  user chose indirect coverage because the scheme's new material (approvals,
+  RFPs, pre-application notices, query responses) is announced in What's New,
+  which is already tracked with full history.
+- Compatibility or migration impact: None; no state exists yet. Known limit:
+  files posted only on this page are not baselined or tracked independently.
+  At verification the page held 59 rows with 57 distinct hrefs in nine section
+  tables (one nested), dated 16/09/2026 back to 21/09/2021, including RFPs
+  dated 13.08.2026. Unannounced additions or edits to the page are not
+  detected. The page shape is kept as the fixture
+  `tests/fixtures/ministry_of_coal/coal_gasification.html`. Promoting the page
+  to a tracked feed later is a coverage expansion that increments
+  `coverage_revision` and silently baselines the new feed.
+- Supersedes: None. Consistent with D-015 and D-016, which leave other
+  Ministry of Coal pages without independent feeds when What's New or another
+  tracked feed carries their material.
+
+### D-022 — Closed contract schema and site host rules
+
+- Date: 2026-10-23
+- Status: Accepted (Step 2 engineering decision)
+- Decision: `policy_tracker.inventory` rejects unknown top-level, `defaults`,
+  site, feed, `completeness`, `archive_href_rewrite`, and coverage-decision
+  keys, and types every key formerly accepted without a schema (Step 1 notes).
+  `policy_tracker.core.config.load_contracts` validates first, then builds one
+  `FeedContract` per `decision: track` feed. Site fetch keys override
+  `defaults`. `HostRules.host_aliases` maps only tested mirrors to the site's canonical
+  host (`canonical_host` if set, else the `base_url` host): the www/apex pair
+  and any D-020 fallback host. HTTPS upgrade and slash collapsing apply only
+  to aliased hosts.
+  `collapse_duplicate_slashes` is an explicit site key, set only on
+  `ministry_of_coal`, citing the tested 2026-10-23 archive-href rewrite.
+  Rolling feeds must declare `removal_authority: false`.
+  `coverage_revision` and `parser_version` default to 1 when absent.
+- Rationale: A typo in a contract key would otherwise be ignored silently and
+  change collection or removal behavior. One canonical host per site keeps
+  identity stable across host fallback (D-020) and mixed-scheme hrefs.
+- Compatibility or migration impact: None; no state exists yet. Coal's
+  `coal.gov.in` and `www.coal.gov.in` file hosts are allowed but not aliased,
+  so their mixed-scheme and doubled-slash hrefs keep their raw identity, as
+  SOURCE_INVENTORY requires, until a tested rule exists. Adding such a rule
+  later changes document keys and needs a migration.
+- Supersedes: None.
+
+### D-023 — State-engine ownership, replay, and ordering rules
+
+- Date: 2026-10-23
+- Status: Accepted (Step 2 engineering decision)
+- Decision: When a record appears on several feeds, only its owning feed may
+  change its title, dates, canonical URL, or metadata values. The owner is
+  ranked by present appearance first, then authoritative feeds before rolling
+  ones (the runner passes `authoritative_feeds`), then earliest first sighting,
+  then feed id; enrichment and the digest use the same ranking. A non-owner may
+  only fill gaps: a missing `matter_key`, a date when the record has none, and
+  metadata keys the record lacks. The owner's sighting keeps metadata keys it
+  omits, except during a parser migration. (Revised 2026-10-23 after review: a
+  rolling bulletin seen first had owned records forever.) Removal counters advance only when the run id differs from the
+  feed's last complete run and the observation is newer than the feed's latest
+  sighting; an older observation is quarantined as `stale_observation`. A
+  parser-version change applies metadata and section changes silently for
+  that feed until a complete accepted run. Event ids hash the event type,
+  feed, entity, and changed values, not the run id, so archives key history on
+  `(run_id, event_id)`. The runner applies live feeds first, then baselining
+  and backfill feeds, each sorted by feed id, so a new publication is reported
+  as `new_document` even when a baselining feed also sees it.
+- Rationale: Without ownership, two feeds showing different titles for one
+  document would emit `metadata_changed` every week. The replay guard keeps
+  reruns of the same snapshot from withdrawing records (PROJECT_PLAN Step 8).
+  Feed order otherwise changes event types within a run.
+- Compatibility or migration impact: None; no state exists yet. A rebaseline
+  reason has no state field and is recorded in the run manifest instead.
+  See `docs/STATE_ENGINE.md`.
+- Supersedes: None.
+
+### D-024 — Policy-enforcing HTTP fetcher and block-page detection
+
+- Date: 2026-10-23
+- Status: Accepted (Step 3 engineering decision)
+- Decision: `adapters/http.HttpFetcher` is the only production fetcher.
+  `fetcher_for` shares one instance per site, so the rate limit, failure count,
+  and circuit breaker are site-level for a whole run. Redirects are followed
+  manually, and every hop must be an allowed host resolving only to globally
+  routable addresses. Any HTTP status (304, 404, 5xx) is returned unchanged and
+  resets the failure count; only network-class errors count toward the
+  breaker, and policy refusals never retry or count. When local DNS fails and
+  an environment proxy carries the request, the proxy's resolution is trusted.
+  Adapters call `adapters/blocks.detect_block_page` on listing responses and
+  report hits as block-page evidence.
+- Rationale: PROJECT_PLAN retrieval limits, D-017, and D-020. Keeping body
+  inspection out of the fetcher keeps "block pages never trigger fallback"
+  explicit.
+- Compatibility or migration impact: None. Error strings are listed in
+  `docs/FETCHING.md` and appear in run-health output.
+- Supersedes: None.
+
+### D-025 — Adapter identity rules and undated sightings
+
+- Date: 2026-10-23
+- Status: Accepted (Steps 3–5 engineering decision)
+- Decision:
+  - **CERC.** Documents are keyed by canonical URL, so one file listed on
+    several feeds (home bulletin and a draft row, recent orders and an annual
+    archive) is one document. Row identifiers are matter native ids:
+    `draft_reg:N`, `current_reg:N`, `disc_paper:N`, `spn:<petition>`, and
+    `public_hearing:<hash of year and matter text>`. Serials, petition numbers,
+    archive years, and leaf pages are metadata. When one file appears under
+    two matters, the first parent seen wins.
+  - **Ministry of Coal.** Documents are keyed by the attachment href in
+    canonical form. A row with no link at all uses `linkless:` plus a hash of
+    feed, section, title, raw date, and occurrence order, so a shifting row
+    position does not create a weekly new document. Linked rows never use it.
+  - **Ministry of Power.** Documents are keyed by WordPress attachment id. The
+    document URL is the attachment-record API, which enrichment resolves to the
+    file (English first, then bilingual, then Hindi). When separate English
+    and Hindi files exist, only the English file is hashed, so a change to the
+    Hindi file alone is not detected (D-005, D-008).
+  - **Engine.** A sighting with no date at all (such as a Coal archive table
+    without a date column) never clears a document's known date; a different
+    date still emits `metadata_changed`.
+- Rationale: keying CERC documents by serial plus href would raise duplicate
+  new-document alerts across feeds. Without the linkless rule, the Coal "test"
+  row would alert weekly. Without the date rule, every current-to-archive move
+  would also report a lost date.
+- Compatibility or migration impact: None; no state exists yet. Known risks:
+  if CERC renumbers serials, its matters get new keys, and editing a public
+  hearing's text gives it a new key. Live page shapes could not be rechecked
+  from this environment (proxy refusal), so adapters rest on the Step 1
+  fixtures.
+- Supersedes: None.
+
+### D-026 — Deadline extraction and digest classification rules
+
+- Date: 2026-10-23
+- Status: Accepted (Step 6 engineering decision)
+- Decision: Numeric dates are read as DD/MM (Indian convention). A date counts
+  as a deadline only in a sentence with a deadline topic and cue; ambiguous
+  dates (two-digit year, impossible, MM/DD-only, or no year) are flagged with
+  no date and left out of `open_deadlines.csv`. A stated extension replaces
+  earlier non-extension dates in the same record. A deadline change is
+  reported only for records that existed before the run, on feeds that were
+  live before it; the first deadline index is built silently, and an
+  evidence-only change is not a deadline change. Classification is
+  deterministic and driven by `config/taxonomy.yaml` (schema version 2): a
+  routine gate with promotion terms, then title rules, feed defaults, and text
+  terms, falling back to "Other updates".
+- Rationale: D-004 and D-007; avoids re-alerting on wording-only changes and
+  keeps ambiguous dates visible without guessing.
+- Compatibility or migration impact: None. The rules are first-pass
+  heuristics, not yet tuned against live listings, and change only by editing
+  the taxonomy file.
+- Supersedes: None.
+
+### D-027 — Outbox, Message-ID, abandonment, and workflow modes
+
+- Date: 2026-10-23
+- Status: Accepted (Step 7 engineering decision)
+- Decision: Each post-baseline run writes an immutable bundle at
+  `outbox/<run_id>/` and pushes it before contacting SMTP. The Message-ID is
+  `<run_id.digest.policy-tracker@sender-domain>`, so a retry after an
+  ambiguous send reuses it. Only a hash and count of the recipient set are
+  stored; a send is refused if `SMTP_TO` no longer matches. While a delivery is
+  pending, `run`, `baseline`, and `rebaseline-feed` stop before crawling; an
+  operator may `abandon-delivery <id> --reason`, which is recorded and leaves
+  the candidate unpromoted. Pushes to `tracker-data` are fast-forward only
+  after checking the expected remote head; a mismatch aborts before SMTP. The
+  scheduled workflow takes a `mode` dispatch input (`run` or `baseline`) so
+  the first silent baseline can run from Actions.
+- Rationale: D-010 and D-011: at-least-once delivery without losing or
+  silently skipping a digest, and no history overwrite under concurrency.
+- Compatibility or migration impact: None. Workflows and real SMTP were tested
+  only offline (local bare repositories and a fake SMTP server).
+- Supersedes: None.
+
+### D-028 — Rotating document revalidation
+
+- Date: 2026-10-23
+- Status: Accepted (Step 8 fix)
+- Decision: Besides documents touched by this run's events and documents with
+  no version yet (capped by `TRACKER_MAX_DOCUMENTS`, default 200), every run
+  revalidates up to `TRACKER_REVALIDATE_DOCUMENTS` (default 150) already-hashed
+  active documents, least recently verified first, using conditional requests
+  (D-008).
+- Rationale: The Step 8 acceptance drill showed that a file replaced under an
+  unchanged listing was otherwise never requested again. Rechecking every file
+  every week would exceed the Coal rate limit (D-017) on large collections.
+- Compatibility or migration impact: None. A full cycle takes roughly
+  (active documents ÷ 150) weeks; raise the variable to shorten it.
 - Supersedes: None.
 
 ## Decision template

@@ -1,9 +1,10 @@
 # Source Inventory
 
-> Status: **preliminary research only**. This is the Step 1 working document,
-> not an approved complete inventory. A future agent must verify every endpoint,
-> pagination boundary, archive/year selector, document relationship, and
-> exclusion before changing the status to complete.
+> Status: **Step 1 research complete for all three sites (2026-10-23); awaiting
+> user review before Step 2.** Every endpoint, pagination boundary, archive/year
+> selector, document relationship, and exclusion recorded below has been
+> verified or recorded as an accepted coverage limit. The inventory is not
+> approved until the user completes the final checklist item.
 
 ## Verification log
 
@@ -59,6 +60,34 @@ site passes the checklist.
   bundle probe intended to locate additional Ministry of Power navigation/search
   APIs was stopped when the pause was requested; no result from that probe was
   used.
+
+### 2026-10-23 — Coal re-verification, CERC merge, and Step 1 close
+
+- **Ministry of Coal re-verification.** Two passes at D-017 pacing (75 requests
+  in total, at least 4.5 s apart) received no CAPTCHA page. They verified
+  `coal_auction_allotment` (414 rows over nine pages plus a 40-row archive),
+  `coal_minutes_of_meetings` (93-row archive), and the termination-order
+  archive. They also found pagers or archives missing from eight contracts
+  marked verified on 2026-10-22, all of which are now modelled. Every other
+  tracked feed was re-checked for a pager or archive link. The Hindi interface,
+  site search, and every sitemap-only narrative page except seven were fetched.
+  Details: Ministry of Coal, "Re-verification (2026-10-23)".
+- **Coal Gasification (D-021).** The pass found that
+  `/major-statistics/national-coal-gasification-mission` is an active scheme
+  dossier (59 dated rows). The user decided it stays **indirect**, not a
+  tracked feed. What's New still captures its announcements; files posted only
+  on that page are a known limit.
+- **Accepted coverage limit.** Seven safety and Sustainable Development Cell
+  narrative pages were never fetched in any session. They stay `indirect`.
+- **CERC merge.** The six D-018 feeds, their `required_feed_ids` (25 in all),
+  the 21-entry `coverage_decisions` list, and the D-020 site-level host-fallback
+  keys are merged into `config/sources.yaml`. CERC is `research_status:
+  complete`.
+- **Ministry of Power** was already complete after the Citizen Engagement
+  resolution.
+- A live probe of `www.coal.nic.in` at 12:25 IST failed because the cloud
+  environment's egress proxy refused the tunnel (HTTP 403). That is the
+  environment's network policy, not a site block.
 
 ## Required inventory fields
 
@@ -191,7 +220,9 @@ Headless Chromium was not used.
   guidelines, and publications. With `limit=1` the archive pass paginates like
   the published pass: `total_pages: 2`, and page 3 is an empty `posts` array with
   the totals kept. `mop_documents` now has an archive-status pass per root slug
-  (see `mop_documents_patch.md`).
+  (`status_passes` in `config/sources.yaml`). Removal requires absence from both
+  passes in two consecutive complete enumerations; a publish-to-archive move is
+  a status change.
 - The alternative bundle path `document/documents?type=Report` returned a
   WordPress HTML error page. The live frontend uses `document_category`.
 
@@ -279,9 +310,26 @@ digest must warn so the page can be reconsidered as a feed. Fixture:
 
 #### Remaining before `research_status: complete`
 
-All Ministry of Power feeds and site-level decisions are merged and verified.
-The site can be marked complete once the strict gate reports no Ministry of
-Power errors other than `research_status`.
+All Ministry of Power feeds and site-level decisions are merged and verified,
+and the site is `research_status: complete`.
+
+#### Open items for user review (not blocking)
+
+- **Schemes and Services.** Offerings programme pages, including schemes, are
+  excluded because the plan's Ministry of Power families do not list schemes
+  (the Coal families do). Confirm whether Ministry of Power schemes should be
+  tracked.
+- **Menu drift.** The three menu APIs are not configured feeds, so a new
+  navigation section surfaces only at an inventory refresh. A cheap weekly
+  menu-tree diff could be added.
+- **CMS backend host.** Search results link to
+  `cms-powermin.digifootprint.gov.in`. Keep it out of `allowed_hosts` unless a
+  feed needs it.
+- **Archive move between runs.** A What's New post that moves to the archive
+  between the two fetches of one run may appear in both responses or in
+  neither. Identity by post ID across `mop_whats_new` and
+  `mop_whats_new_archive` handles the duplicate. The "neither" case is caught
+  on the next run.
 
 ## Ministry of Coal
 
@@ -298,35 +346,38 @@ What’s New: <https://www.coal.nic.in/whats-new>
 - Some annual/report lists link to nested detail pages rather than directly to
   files.
 
-### Verified endpoint shapes (2026-10-22)
+### Verified endpoint shapes (2026-10-22; boundaries corrected 2026-10-23)
+
+Rows marked *(2026-10-23)* take the boundaries found by the re-verification
+passes. Archive pages are reached through the archive URL rewrite rule below.
 
 | Endpoint | Observed shape | Current contract consequence |
 |---|---|---|
 | `/sitemap` | Single HTML navigation tree with publication and generic branches | Discovery-only; compare link set but never infer publication removal |
-| `/whats-new` | Single four-column table with direct downloads and displayed dates | Track every row; rolling and never removal authority |
-| `/public-information/monthly-statistics-at-glance` | Single attachment table, 50 visible rows, June 2022–September 2026 with gaps | Track every exposed row as an authoritative collection; do not manufacture missing months |
-| `/public-information/statistical-report` | Single attachment table, 50 visible monthly rows, July 2021–August 2025 | Track as a distinct authoritative historical collection |
-| `/major-statistics/production-and-supplies` | Narrative/data page with current tables and linked ten-year datasets | Decide whether to track page changes directly or cover linked datasets separately |
-| `/acts-rules-policies` | Five HTML tables, 172 total rows, covering Acts, rules, policies, methodologies, and notifications | Track as one authoritative collection; do not use upload-folder years as publication dates |
-| `/major-statistics/quarterly-booklet` | One table with 10 data rows | Track as authoritative collection |
-| `/major-statistics/rsr-report` | One table with 1 data row | Track; a later unexpected empty table is suspicious |
-| `/major-statistics/coal-statistics` | One table with 17 data rows | Track as authoritative collection |
-| `/sustainable-development-cell/report` | One table with 3 data rows | Track sustainability guidelines and reports |
-| `/nominated-authority/sanction-order-notice` | One table with 50 data rows | Track compensation/sanction orders and notices |
-| `/nominated-authority/termination-order` | Explanatory 32-block table plus attachment table; 64 total HTML rows | Enumerate attachments from the second table; preserve explanatory context separately |
-| `/nominated-authority/national-coal-index` | One table with 50 data rows | Track as authoritative monthly index collection |
-| `/nominated-authority/national-lignite` | One table with 11 data rows | Track as authoritative monthly index collection |
-| `/public-information/monthly-summary-cabinets` | One table with 48 data rows | Track as authoritative collection |
-| `/public-information/standing-linkage-committee1` | 89 rows across pager pages 0 and 1; oldest displayed date 16 August 2017 | Track all rows; page 1 is the verified pager terminus |
-| `/public-information/reports/annual-reports` | 18 parent rows (2009-10–2025-26) and 355 child attachments across all detail pages | Track every parent and nested child; periodically revisit historical children because old parents evolve |
-| `/public-information/reports/budget-reports` | 18 parent rows (2009-10–2026-27) and 38 child attachments across all detail pages | Track every parent and nested child |
-| `/public-information/reports/other-reports` | 3 parent rows, each with one child attachment | Track every parent and nested child |
-| `/public-information/action-plan` | Direct list of 3 plans | Track list; it is not a table |
-| `/public-information/monthly-report-cabinet` | Current table has 50 rows (June 2021–October 2025); explicit archive has 50 rows (November 2016–September 2021) | Track both tables as one rotating-archive feed; neither list establishes removal |
-| `/public-information/paper-laid-table` | One table with 11 data rows | Track all rows even when the title embeds the only publication date |
-| `/public-information/sop` | One table with 1 data row | Track as authoritative collection |
-| `/CSR/guidelines` | One table with 8 data rows | Track CSR policies, guidelines, FAQs, and clarifications |
-| `/central-sector-schemes` | One canonical narrative page describing 3 schemes and an embedded budget table | Track page-level content changes; it currently has no publication attachments |
+| `/whats-new` | *(2026-10-23)* Four-column table with a **41-page pager** (`?page=0..40`; page 0's Last page link is `?page=40`). 2042 rows, newest 16 Oct 2026, oldest displayed date 26 Apr 2000. Malformed tail rows: one dated `08 Oct 0013`, four undated, one titled `test` with no link. No archive link | Track every row with paged enumeration; weekly pages until a page holds only known hrefs, monthly full enumeration. The silent baseline must enumerate every page. `kind: rolling`, never removal authority (reclassification deferred to Step 2) |
+| `/public-information/monthly-statistics-at-glance` | *(2026-10-23)* Attachment table with a pager `?page=0..1`: 64 rows, September 2026 back to April 2021, with gaps. No archive | Paged enumeration of an authoritative collection; do not manufacture missing months |
+| `/public-information/statistical-report` | *(2026-10-23)* Attachment table with a pager `?page=0..1`: 56 monthly rows, March 2025 back to April 2020. No archive | Paged enumeration; a distinct authoritative historical collection |
+| `/major-statistics/production-and-supplies` | Narrative/data page with current tables and linked ten-year datasets | Indirect (D-016); the statistics feeds carry the same data |
+| `/acts-rules-policies` | Five HTML tables, 172 HTML rows (20+116+9+12+10 = 167 data rows, 26/11/1960 to 29/06/2026), covering Acts, rules, policies, methodologies, and notifications. No pager or archive (2026-10-23) | Track as one authoritative collection; do not use upload-folder years as publication dates |
+| `/major-statistics/quarterly-booklet` | One table with 10 data rows, no S.N column, DD-MM-YYYY dates (17-09-2026 back to 22-05-2024). No pager or archive (2026-10-23) | Track as authoritative collection |
+| `/major-statistics/rsr-report` | One table with 1 undated data row. No pager or archive (2026-10-23) | Track; a later unexpected empty table is suspicious |
+| `/major-statistics/coal-statistics` | One table with 17 data rows. No pager or archive (2026-10-23) | Track as authoritative collection |
+| `/sustainable-development-cell/report` | One table with 3 data rows, no S.N column, 24-10-2024 back to 01-08-2024. No pager or archive (2026-10-23) | Track sustainability guidelines and reports |
+| `/nominated-authority/sanction-order-notice` | *(2026-10-23)* Pager `?page=0..4`: 233 rows, 06/10/2026 back to 28/10/2016. **Archive** `/nominated-authority/archive-sanction-order-notice`: 63 undated rows over `?page=0..1` (2014–2015 Ordinance-era material) | `rotating_archive`; removal requires absence from every current and archive page in two consecutive complete enumerations, and a current-to-archive move is a status change |
+| `/nominated-authority/termination-order` | *(2026-10-23)* Explanatory 32-block table plus an attachment table of 32 rows (29/06/2026 back to 13/01/2017), no pager. **Archive** `/nominated-authority/archive-termination-order`: 1 undated row on one page, href not in the current table | Enumerate attachments from the second table plus the archive; preserve explanatory context separately; `rotating_archive` with the current-plus-archive two-run removal rule |
+| `/nominated-authority/national-coal-index` | *(2026-10-23)* Pager `?page=0..1`: 83 rows (82 distinct hrefs), 29/09/2026 back to 05/06/2020. **Archive** `/nominated-authority/archive-national-coal-index`: 4 undated rows, no pager | `rotating_archive` with the same removal rule as compensation orders |
+| `/nominated-authority/national-lignite` | One table with 11 data rows, DD-MM-YYYY dates (16-10-2026 back to 07-12-2023). No pager or archive (2026-10-23) | Track as authoritative monthly index collection |
+| `/public-information/monthly-summary-cabinets` | *(2026-10-23)* 48 rows (February 2025 back to August 2020), no pager. **Archive** `/public-information/monthly-summary-cabinets/archive-monthly-summary-cabinets`: 77 rows over `?page=0..1` (December 2022 back to September 2014). Period ranges overlap but no href is shared | `rotating_archive` with the current-plus-archive removal rule |
+| `/public-information/standing-linkage-committee1` | 89 rows across pager pages 0 and 1; oldest displayed date 16 August 2017. Re-checked 2026-10-23: page 0 starts 2026-06-15, Last page still `?page=1`, no archive | Track all rows; page 1 is the verified pager terminus |
+| `/public-information/reports/annual-reports` | 18 parent rows (2009-10–2025-26) and 355 child attachments across all detail pages (children enumerated 2026-10-22; parent index re-checked 2026-10-23, no pager or archive) | Track every parent and nested child; periodically revisit historical children because old parents evolve |
+| `/public-information/reports/budget-reports` | 18 parent rows (2009-10–2026-27) and 38 child attachments across all detail pages (children enumerated 2026-10-22; parent index re-checked 2026-10-23, no pager or archive) | Track every parent and nested child |
+| `/public-information/reports/other-reports` | 3 parent rows, each with one child attachment (parent index re-checked 2026-10-23, no pager or archive) | Track every parent and nested child |
+| `/public-information/action-plan` | Direct list of 3 plans (two coal.gov.in PDFs and a coal.gov.in/actionplan HTML page for FY 2024). No archive (2026-10-23) | Track list; it is not a table |
+| `/public-information/monthly-report-cabinet` | *(2026-10-23)* Current pager `?page=0..1`: 56 rows (October 2025 back to November 2018). Archive `/public-information/monthly-report-cabinet/archive-monthly-report-cabinet` pager `?page=0..1`: 66 rows (September 2021 back to April 2015); one archive row (September 2016) has no link | Paged current plus paged archive as one rotating-archive feed, with the current-plus-archive removal rule |
+| `/public-information/paper-laid-table` | One table with 11 data rows. No pager or archive (2026-10-23) | Track all rows even when the title embeds the only publication date |
+| `/public-information/sop` | One table with 1 data row (08-08-2024). No archive (2026-10-23) | Track as authoritative collection |
+| `/CSR/guidelines` | One table with 8 data rows, all dated 03-04-2024 (a posting date). No archive (2026-10-23) | Track CSR policies, guidelines, FAQs, and clarifications |
+| `/central-sector-schemes` | One canonical narrative page describing 3 schemes and an embedded 6-row budget table (BE/RE 2022-23), no files, no archive (2026-10-23) | Track page-level content changes; it currently has no publication attachments |
 
 The Acts/Rules/Policies collection currently exposes 169 document-like links
 across the whole rendered page, including unrelated navigation/footer files.
@@ -362,7 +413,8 @@ internal branch was mapped either to a configured feed or to a group decision.
 Ambiguous branches were probed once at about one request per second. After
 roughly 70 requests, the server began returning an **HTTP 200 CAPTCHA
 "Validation request" page** (error code 421) for every URL. Probing stopped and
-the remaining pages were decided from sitemap evidence (see "Open verification").
+the remaining pages were decided from sitemap evidence. The 2026-10-23
+re-verification passes later fetched them; see "Re-verification (2026-10-23)".
 
 #### Observed behaviour relevant to contracts
 
@@ -378,9 +430,27 @@ the remaining pages were decided from sitemap evidence (see "Open verification")
   `archive-review-meeting-scrutiny-committee`, `archive-single-window-system`,
   `archive-vacancy`, `archive-tender-na`,
   `/public-information/advertisements/archive-advertisements`, and
-  `/public-information/grant-in-add/archive-grant-in-add`. Archive links are
-  emitted as `http://www.coal.nic.in//...`, with an HTTP scheme and a double
-  slash, so adapters must normalise them before dereferencing.
+  `/public-information/grant-in-add/archive-grant-in-add`. The 2026-10-23
+  passes found more on tracked feeds:
+  `/nominated-authority/archive-sanction-order-notice`,
+  `/nominated-authority/archive-national-coal-index`,
+  `/public-information/monthly-summary-cabinets/archive-monthly-summary-cabinets`,
+  and `/nominated-authority/archive-termination-order` (plus the already
+  modelled `monthly-report-cabinet` archive). Archive tables usually lack a
+  Date column (S.N/Title/Attachment only); the minutes archive is the dated
+  exception. Archive links are emitted as `http://www.coal.nic.in//...`, with
+  an HTTP scheme and a double slash, so adapters must normalise them before
+  dereferencing.
+- **Anti-bot script.** Since 2026-10-23 every page carries an injected
+  `<script src="/bnith__…">` tag whose token changes on each request. Re-fetches
+  were otherwise byte-identical, so content and ordering are deterministic per
+  URL, but page fingerprints must exclude this script.
+- **Offset pagers over tied dates.** Drupal pagers page by offset over a
+  non-unique date sort. Rows sharing a date can repeat across a page boundary
+  (seen on Auction/Allotment) and others may be silently skipped. Identity is
+  by href, and one enumeration pass never proves completeness.
+- **Out-of-range page.** A `?page=N` past the pager terminus returns HTTP 200
+  with the heading and pager but no tables. It is not an empty collection.
 - **Block page.** The anti-automation response is HTTP 200 `text/html`, about
   1 KB, with `<title>Validation request</title>` and a `captcha_resp` form. It
   must be quarantined as a block page and never parsed as an empty collection.
@@ -405,36 +475,37 @@ the remaining pages were decided from sitemap evidence (see "Open verification")
 
 | Scope | Decision | Feed(s) / reason |
 |---|---|---|
-| What's New (homepage block + `/whats-new`) | track | `coal_whats_new`; rolling, never removal authority |
+| What's New (homepage block + `/whats-new`) | track | `coal_whats_new`; 41-page pager, 2042 rows back to 2000; rolling, never removal authority |
 | Acts & Policies | track | `coal_acts_rules_policies` |
 | Major Statistics tables | track | `coal_monthly_statistics`, `coal_statistical_reports`, `coal_quarterly_reports`, `coal_rsr_reports`, `coal_coal_statistics` |
 | Public Information collections | track | `coal_cabinet_summaries`, `coal_monthly_cabinet_reports`, `coal_standing_linkage_committee`, `coal_action_plans`, `coal_papers_laid`, `coal_sop` |
 | Reports (annual/budget/other) | track | `coal_annual_reports`, `coal_budget_reports`, `coal_other_reports` |
 | NA orders and indices | track | `coal_compensation_orders`, `coal_termination_orders`, `coal_national_coal_index`, `coal_national_lignite_index` |
 | Sustainability report, CSR guidelines, Central Sector Schemes | track | `coal_sustainability_reports`, `coal_csr_guidelines`, `coal_central_schemes` |
-| NA Auction/Allotment (pages 0–8) + archive | track (D-015) | `coal_auction_allotment`; unverified beyond page 0 |
-| Meeting minutes: general (+ archive), NA Production Reviews, NA Operationalisation Reviews | track (D-015) | `coal_minutes_of_meetings` (archive unverified), `coal_production_reviews`, `coal_operationalisation_reviews` |
+| NA Auction/Allotment (pages 0–8) + archive | track (D-015) | `coal_auction_allotment`; verified 2026-10-23 |
+| Meeting minutes: general (+ archive), NA Production Reviews, NA Operationalisation Reviews | track (D-015) | `coal_minutes_of_meetings` (archive verified 2026-10-23), `coal_production_reviews`, `coal_operationalisation_reviews` |
 | NA Scrutiny Committee, Single Window System, Energy Cell | exclude (D-015) | Not independent feeds; What's New appearances still captured |
 | Ministry Press Releases + archive + homepage block | exclude (D-014) | Duplicates PIB communication; What's New appearances still captured |
 | Production and Supplies | indirect (D-016) | Statistics feeds carry the same data; narrative fingerprint would be noisy |
 | Sitemap and hub pages | indirect | `coal_sitemap` link-set comparison |
-| Narrative/thematic pages (statistics narratives, gasification, SDC topics, safety, roadmap, flipbook, Chintan Shivir, procurement projection, About CSR/NA, tranche-wise allocation) | indirect | Static descriptive pages; new material is expected in What's New |
+| Narrative/thematic pages (statistics narratives, SDC topics, safety, roadmap, flipbook, Chintan Shivir, procurement projection, About CSR/NA, tranche-wise allocation) | indirect | Static descriptive pages; new material is expected in What's New. Seven pages never fetched (accepted limit, below) |
+| Coal Gasification (`/major-statistics/national-coal-gasification-mission`) | indirect (D-021) | Active scheme dossier, not a tracked feed. What's New captures its announcements; files posted only on this page are a known limit |
 | Generic organisation/site pages | exclude | About Us, Who's Who, ministers, Organisations, Contact, Help, Screen Reader, policies, Feedback, Technical Help Desk |
 | Administrative compliance | exclude | Citizen Charter, Grievance Cell, RTI hub/PIO/proactive disclosures, Grant-in-Aid |
 | Operational procurement/recruitment | exclude | Tenders (open/past), NA Tender, NA Vacancy, Advertisements (+ archives) |
 | Galleries and legacy showcases | exclude | Photo Gallery, SDC Videos, CSR gallery PDF, Success Stories (2019), Mines Summary (2019) |
 | External outbound links | exclude | PIB, Sansad (Parliament Q&A), rti.gov.in, Coal India critical-stock page, coal-block portals, SWCS/CIMS/CPPP/MSTC, india.gov.in footer, social media |
-| Site search and Hindi interface | exclude | Drupal keyword search is not enumerable. Hindi re-presents the same nodes. English metadata is authoritative |
+| Site search and Hindi interface | exclude | Drupal keyword search is not enumerable (149 pages, repeated results, index timestamps). Hindi re-presents the same nodes; English metadata is authoritative. Hindi translation files reachable only from `/hi` are not collected |
 
-The four D-015 feeds are specified in `coal_new_feeds.yaml`. They must be added
-to `config/sources.yaml` and `required_feed_ids` together with the coverage list.
+The four D-015 feeds and the coverage list are merged into `config/sources.yaml`
+and `required_feed_ids`.
 
-#### New feed boundaries (observed 2026-10-22)
+#### New feed boundaries (observed 2026-10-22, completed 2026-10-23)
 
 | Feed | Observed boundary | Status |
 |---|---|---|
-| `coal_auction_allotment` | Page 0 holds a state statistics table (ignored) and a 50-row document table, 07/10/2026 back to 19/11/2024. The pager "Last page" link is `?page=8` (nine pages). Also has an "Archive Auction/Allotment" link | **Unverified**: pages 1–8 and the archive returned the CAPTCHA |
-| `coal_minutes_of_meetings` | 23 rows, 2021-01-29 through 2025-10-07, no pager, plus an "Archive Minutes of Meetings" link | **Unverified**: archive not fetched |
+| `coal_auction_allotment` | Each page holds a state statistics table (ignored) and the document table. `?page=0..8` hold 8 × 50 + 14 = 414 rows (S.N 1–414, no gaps), 07/10/2026 back to 19/04/2017, dates never increasing. Every page's Last page link is `?page=8`; `?page=9` renders the pager with no tables. 406 distinct hrefs: 7 repeats at page boundaries where rows share a date, 1 within page 1. Archive `/nominated-authority/archive-auction-allotment` (heading typo "Archive Auction /Allotmnet"): 40 undated rows on one page, three columns, files in 2021 upload folders, December 2014 to June 2021 titles, no href shared with the current view | Verified 2026-10-23 |
+| `coal_minutes_of_meetings` | 23 current rows, 2021-01-29 through 2025-10-07, no pager (observed 2026-10-22). Archive `/public-information/minutes-metings/archive-minutes-metings`: 93 rows over `?page=0..1` (50 + 43), 93 distinct hrefs, four columns with YYYY-MM-DD dates from 2005-06-02 to 2019-12-13, **not in date order**; no href shared with the current table | Verified 2026-10-23 |
 | `coal_production_reviews` | 25 rows (24 distinct hrefs), 19-10-2022 through 24-07-2025, no pager, no archive | Verified |
 | `coal_operationalisation_reviews` | Summary table plus 26 rows (24 distinct hrefs), 15-09-2021 through 23-05-2025, no pager, no archive | Verified |
 
@@ -458,29 +529,90 @@ and preserve prior state. Do not retry in a loop.
   documents under one row/matter**, record each file's language, and keep the
   English listing metadata even when the Hindi file is the only usable one.
   Identical hrefs collapse to one document.
-- Known limitation: Hindi-only nodes that never appear on English listings
-  would not be detected. This was not verified because of the block.
+- The `/hi` homepage What's New block was spot-checked on 2026-10-23. Its 21
+  items mirror English What's New rows; 9 link the same file and about 12 link
+  a distinct Hindi-language PDF (for example `…-wnhi.pdf`) that the English
+  listing never links. No Hindi-only publication was found. The Hindi block
+  shows a bracketed date, for example `(30/09/2026)`.
+- Known limitations: Hindi-only nodes that never appear on English listings
+  would not be detected, and Hindi translation files reachable only from `/hi`
+  are not collected.
 
-#### Open verification (re-check once before marking complete)
+#### Re-verification (2026-10-23)
 
-A follow-up attempt at 5 s spacing also received the CAPTCHA on its first
-request (`/nominated-authority/auction-allotment?page=1`) and stopped
-immediately, per D-017.
+Two passes at D-017 pacing (75 requests, at least 4.5 s apart) received no
+CAPTCHA. The full request logs were merged here from the Step 1 working notes.
 
+Verified:
+- `coal_auction_allotment`: 414 rows across `?page=0..8` (07/10/2026 back to
+  19/04/2017); `?page=9` renders the pager with no tables; the archive has 40
+  undated rows on one page. Offset paging over tied dates repeats 7 hrefs at
+  page boundaries (406 distinct hrefs in 414 rows), so identity is by href and
+  one pass never proves completeness.
+- `coal_minutes_of_meetings`: the archive has 93 rows across `?page=0..1`,
+  dated 2005-06-02 to 2019-12-13 and not in date order.
+- `coal_termination_orders`: the archive has one undated row on a single page.
+- The archive URL rewrite (`http://www.coal.nic.in//<path>` to
+  `https://www.coal.nic.in/<path>`) was exercised live on seven archive pages.
+- Pagers or archives missing from the 2026-10-22 contracts are now modelled
+  for What's New (41 pages, 2042 rows back to 2000, with malformed tail rows;
+  the silent baseline must enumerate every page), compensation orders (5 pages
+  and a 2-page undated archive), National Coal Index (2 pages and a 4-row
+  archive), Monthly Statistics (2 pages), Statistical Report (2 pages), Monthly
+  Summary for Cabinet (2-page archive), Monthly Reports for Cabinet (2 current
+  pages and a 2-page archive), and termination orders (1-row archive).
+- Every other tracked feed was re-checked and has no pager or archive. The
+  annual, budget, and other report detail pages were last enumerated on
+  2026-10-22; only their parent indexes were re-checked.
+- Coal Gasification (`/major-statistics/national-coal-gasification-mission`)
+  is an active scheme publication collection: nine Title/Attachment/Date
+  section tables (one nested), 59 rows with 57 distinct hrefs, 16/09/2026 back
+  to 21/09/2021, one undated row, absolute coal.gov.in hrefs with mixed schemes
+  and 7 doubled path slashes, no pager or archive. It includes the gasification
+  scheme approval, RFPs dated 13.08.2026, pre-application notices, and query
+  responses. By user decision **D-021 it stays `indirect`**, not a tracked feed:
+  What's New captures its announcements, and many rows already appear there.
+  Fixture `coal_gasification.html` is the evidence for that decision.
+- Narrative pages confirmed `indirect`: Coal Grades, Coal Reserves, Mission
+  Coking Coal, Grading of Coal, Coal Evacuation Plan, Clearances, Technology
+  Roadmap, Achievements Flipbook, Chintan Shivir, Procurement Projection, About
+  CSR, Safety Statistics, Safety Initiatives, About SDC, Greening Initiatives,
+  Mine Water Utilization, and Promoting Renewable. The ones with files hold
+  small static sets unchanged since 2021–2024. Hubs confirmed: `/CSR`,
+  `/about-safety-coal-mines`, `/sustainable-development-cell`. Coal Evacuation
+  Plan, Clearances, and the SDC hub render escaped HTML rows as text, which
+  must not be parsed as rows (fixture `narrative_static_tables.html`).
+- The Hindi interface mirrors English What's New rows (spot-checked; no
+  Hindi-only item found), often linking distinct Hindi PDFs that are not
+  collected. Site search (149 pages, repeated results) is not enumerable. Both
+  stay excluded.
+- Pages carry an injected anti-bot `<script src="/bnith__…">` whose token
+  changes on every request; exclude it from page fingerprints.
 
-- Pages that returned the CAPTCHA block: `/major-statistics/coal-reserves`,
-  `coal-grades`, `mission-coking-coal`, `grading-coal`, `coal-evacuation-plan`,
-  `Clearances`, `national-coal-gasification-mission`; all `/sustainable-development-cell/*`
-  topic pages and `sdc-videoes`; all safety pages; `/techno-roadmap-coal-sector`;
-  `/achievements-flipbook`; `/CSR`; `/CSR/about-csr`; `/chintan-shivir`;
-  `/procurement-projection`.
-- Not yet fetched: Auction/Allotment pages 1–8 and its archive, the
-  general-minutes archive, the Hindi variant (`/hi/...`), and one search-results
-  page. Other archive pages belong to excluded sections and need no fetch.
-- Not yet checked: whether already-tracked feeds (What's New, compensation
-  orders, NCI/NLI, cabinet summaries, and others) also end in "Archive ..."
-  links that their contracts omit. Only `coal_monthly_cabinet_reports`
-  currently models an archive.
+Accepted coverage limits:
+- **Never fetched (7 pages):** `/major-statistics/safety-coal-mines` (About
+  Safety), `/safety-coal-mines/accident-portal`, and the SDC pages
+  `air-quality-management`, `eco-tourism-in-mining-area`, `energy-efficiency`,
+  `gainful-utilization`, and `sdc-videoes`. Every fetched sibling was
+  text-only; they remain `indirect`. About 7 requests would confirm them later.
+- **Coal Gasification (D-021):** files posted only on the gasification page and
+  never announced in What's New are not captured.
+- Unannounced edits to indirect narrative pages, including a new file added to
+  one of their small static tables, are not detected.
+
+Notes for Step 2 and operations:
+- What's New is a 2042-row history, not a short rolling list. It stays
+  `kind: rolling` with `removal_authority: false`; Step 2 may reclassify it.
+  The weekly refresh should stop early once a page holds only known hrefs.
+- New contract keys used on Coal and accepted by the validator but not yet in
+  a schema: `archive_url`, `archive_href_rewrite` (`applies_to`, `rewrite_to`,
+  `rule`), `completeness.removal_rule`, and `completeness.notes`.
+- A tested identity rule is needed before merging coal.gov.in hrefs that
+  differ only in scheme or doubled slashes; until then raw hrefs are kept.
+- A full Coal enumeration costs roughly 85–90 requests, about 6 minutes at
+  0.25 req/s. `docs/OPERATIONS.md` should record this, the anti-bot script, and
+  the CAPTCHA block signature (`<title>Validation request</title>` or a
+  `captcha_resp` form).
 
 ## CERC
 
@@ -488,6 +620,9 @@ Base: <https://cercind.gov.in/>
 Sitemap: <https://cercind.gov.in/site_map.html>
 
 ### Candidate feeds
+
+The initial candidate list below is kept for history. The verified contracts,
+including the D-018 additions, are in the tables that follow.
 
 | Family | Preliminary endpoint |
 |---|---|
@@ -570,7 +705,8 @@ The escalation-rates tree has two layouts:
 
 #### Additional observations (2026-10-22 to 2026-10-23)
 
-- **Host behaviour:** see `cerc_host_rule.md` and proposed decision D-020. Both
+- **Host behaviour:** see decision D-020 and the site-level host keys in
+  `config/sources.yaml`. Both
   hosts had outage windows of several minutes in which the TLS handshake hung.
   Outside those windows, each host in turn occasionally reset single connections
   while the other answered at once. Production fetching needs a 120 s timeout,
@@ -641,12 +777,9 @@ view-all bulletin remain captured by `cerc_home` (D-001).
 - **Ministry rules.** A Ministry rule or policy posted only on CERC is missed
   unless the CERC bulletin or a Ministry of Power feed carries it.
 
-CERC can be set to `research_status: complete` once the following are merged
-into the repository:
-
-- the 21-entry `coverage_decisions` list;
-- the six D-018 feeds and their `required_feed_ids`;
-- the D-020 host rule.
+The 21-entry `coverage_decisions` list, the six D-018 feeds and their
+`required_feed_ids`, and the D-020 host keys were merged into
+`config/sources.yaml` on 2026-10-23. CERC is `research_status: complete`.
 
 ### Verified CERC endpoint shapes (2026-10-22)
 
@@ -699,22 +832,21 @@ tracked and explain whether they are generic content, independently irrelevant,
 duplicated by another feed, or external to the three-site boundary. Do not treat
 the examples in this document as a complete exclusion decision.
 
-Status at pause: the validator now requires structured site-level coverage
-decisions, but the three `coverage_decisions` lists have not yet been added to
-`config/sources.yaml`. Ministry of Power still needs a decision for the Press
-Release taxonomy root and a documented response to its unusable cross-site XML
-sitemap. Coal and CERC need their non-feed sitemap branches grouped into tracked,
-indirect, excluded-generic, and excluded-external decisions. Do not change any
-site status to complete until those lists and their evidence are reviewed.
+Status (2026-10-23): all three sites carry structured `coverage_decisions` in
+`config/sources.yaml`, and each site section above lists them with evidence and
+coverage limits. Step 1 research is complete for Ministry of Power, Ministry of
+Coal, and CERC. Ministry of Coal's last open items were closed by the
+2026-10-23 re-verification, decision D-021 (Coal Gasification indirect), and
+the accepted limit for seven never-fetched narrative pages.
 
 ## Completion checklist
 
-- [ ] Every sitemap and primary navigation branch has been enumerated.
-- [ ] Site search and What’s New feeds have been checked for hidden publication paths.
-- [ ] Every candidate feed has an explicit contract and fixture set.
-- [ ] Pagination and history boundaries are documented.
-- [ ] Parent/attachment evolution is documented.
-- [ ] Language and date behavior is documented.
-- [ ] Every discovered section has a track/indirect/exclude decision.
-- [ ] `config/sources.yaml` contains only verified contracts.
-- [ ] Inventory reviewed before Step 2 begins.
+- [x] Every sitemap and primary navigation branch has been enumerated.
+- [x] Site search and What’s New feeds have been checked for hidden publication paths.
+- [x] Every candidate feed has an explicit contract and fixture set.
+- [x] Pagination and history boundaries are documented.
+- [x] Parent/attachment evolution is documented.
+- [x] Language and date behavior is documented.
+- [x] Every discovered section has a track/indirect/exclude decision.
+- [x] `config/sources.yaml` contains only verified contracts.
+- [x] Inventory reviewed before Step 2 begins (user approval 2026-10-23).

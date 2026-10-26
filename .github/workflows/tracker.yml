@@ -1,0 +1,82 @@
+# Weekly policy tracker run (PROJECT_PLAN Step 7). See docs/OPERATIONS.md.
+name: Weekly tracker
+
+on:
+  schedule:
+    - cron: "30 2 * * 1" # Monday 02:30 UTC (nominal 08:00 IST); GitHub may start late
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "run (weekly digest) or baseline (silent, never emails)"
+        type: choice
+        options: [run, baseline]
+        default: run
+      dry_run:
+        description: "No email, commit, push or durable state change"
+        type: boolean
+        default: false
+      no_email:
+        description: "Archive the digest and promote without an outbox entry or email"
+        type: boolean
+        default: false
+
+# One run at a time; never cancel an active run (it may be mid-send).
+concurrency:
+  group: policy-tracker-data
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          # No token in .git/config: the job parses untrusted PDFs. The push
+          # credential reaches only the tracker step, as TRACKER_GIT_TOKEN.
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install .
+
+      - name: Run tracker
+        env:
+          TRACKER_GIT_TOKEN: ${{ github.token }}
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT }}
+          SMTP_SECURITY: ${{ vars.SMTP_SECURITY }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          SMTP_TO: ${{ secrets.SMTP_TO }}
+          TRACKER_MAX_DOCUMENTS: ${{ vars.TRACKER_MAX_DOCUMENTS }}
+          TRACKER_ARTIFACT_BASE_URL: ${{ vars.TRACKER_ARTIFACT_BASE_URL }}
+          MODE: ${{ inputs.mode || 'run' }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+          NO_EMAIL: ${{ inputs.no_email || false }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP/tmp"
+          mkdir -p "$TMPDIR"
+          args=(--config config/sources.yaml --data-dir "$RUNNER_TEMP/tracker-data"
+                --repo "$GITHUB_WORKSPACE" --publish)
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          if [ "$NO_EMAIL" = "true" ] || [ "$MODE" = "baseline" ]; then args+=(--no-email); fi
+          policy-tracker "$MODE" "${args[@]}"
+
+      - name: Upload dry-run rendering
+        if: ${{ always() && inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dry-run-${{ github.run_id }}
+          path: ${{ runner.temp }}/tmp/policy-tracker-dry-run-*
+          if-no-files-found: ignore
+          retention-days: 14

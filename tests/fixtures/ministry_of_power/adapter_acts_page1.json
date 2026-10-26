@@ -1,0 +1,79 @@
+{
+  "posts": [
+    {
+      "ID": 7001,
+      "post_date": "2025-11-10 15:40:04",
+      "post_modified": "2025-11-10 15:40:40",
+      "post_title": "Example national policy",
+      "post_slug": "example-national-policy",
+      "acf_data": {
+        "title": "Example national policy",
+        "date": "12/02/2005",
+        "file": [
+          {
+            "type": "PDF",
+            "title": "",
+            "external_link": "",
+            "file": [
+              6001
+            ]
+          }
+        ]
+      },
+      "documents_category": [
+        {
+          "term_id": 136,
+          "name": "Acts and Policy",
+          "slug": "acts-and-policy",
+          "parent": 0
+        },
+        {
+          "term_id": 137,
+          "slug": "general_acts",
+          "parent": 136
+        }
+      ],
+      "post_status": "publish"
+    },
+    {
+      "ID": 7002,
+      "post_date": "2025-11-12 10:00:00",
+      "post_modified": "2026-09-01 09:30:00",
+      "post_status": "publish",
+      "post_title": "Example tariff policy &amp; amendments",
+      "post_slug": "example-tariff-policy-amendments",
+      "acf_data": {
+        "title": "Example tariff policy & amendments",
+        "date": "28/01/2016",
+        "file": [
+          {
+            "type": "PDF",
+            "title": "Policy and amendment",
+            "external_link": "",
+            "file": [
+              6011,
+              6012
+            ]
+          },
+          {
+            "type": "Link",
+            "title": "Example external resolution",
+            "external_link": "https://www.example.org/resolution.pdf",
+            "file": []
+          }
+        ]
+      },
+      "documents_category": [
+        {
+          "term_id": 136,
+          "slug": "acts-and-policy",
+          "parent": 0
+        }
+      ]
+    }
+  ],
+  "total_items": 2,
+  "total_pages": 1,
+  "current_page": 1,
+  "_fixture_note": "Adapter fixture: document_category=acts-and-policy&limit=50&page=1; post 7001 from documents_page.json plus a synthetic multi-group parent"
+}

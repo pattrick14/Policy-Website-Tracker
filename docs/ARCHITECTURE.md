@@ -1,7 +1,8 @@
 # Architecture Context
 
-> This document records the approved target architecture. No runtime components
-> have been implemented yet.
+> This document records the approved architecture, implemented in Steps 2–7.
+> Implementation notes: `docs/STATE_ENGINE.md`, `docs/FETCHING.md`,
+> `docs/DATA_LAYOUT.md`, `docs/OPERATIONS.md`, and `docs/ACCEPTANCE.md`.
 
 ## Component flow
 

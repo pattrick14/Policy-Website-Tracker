@@ -11,9 +11,14 @@ requires-python = ">=3.12"
 license = { text = "Proprietary" }
 dependencies = [
   "PyYAML>=6.0.2",
+  "httpx>=0.28",
+  "beautifulsoup4>=4.12",
+  "lxml>=5.0",
+  "pypdf>=5.0",
 ]
 
 [project.scripts]
+policy-tracker = "policy_tracker.operations.cli:main"
 policy-tracker-inventory = "policy_tracker.inventory:main"
 
 [project.optional-dependencies]

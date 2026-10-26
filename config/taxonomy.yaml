@@ -1,51 +1,226 @@
-schema_version: 1
+schema_version: 2
 
-# Preliminary deterministic categories. Step 6 owns the tested production rules.
+# Deterministic digest classification (D-001, D-004). Read by
+# policy_tracker.reporting.classify; every rule that fires is recorded as a
+# reason on the digest item. Classification only orders the digest: every
+# selected-feed item is archived whatever its category.
+#
+# How an item is classified (first step that decides wins):
+#   1. Routine gate. Items on a `routine_feeds` feed, or whose title matches
+#      `routine.title_terms`, are ROUTINE unless a `promote` term matches the
+#      title or the start of the document text (policy significance).
+#   2. Title terms. The highest-priority category whose terms match the title.
+#   3. Feed default (`feed_defaults`).
+#   4. Text terms over the first `text_scan_chars` characters of the listing
+#      metadata and extracted text.
+#   5. Otherwise ROUTINE with reason "fallback:unclassified" ("Other updates").
+# Independently, `action_text_terms` in the start of the text, a found
+# deadline, or a deadline change promote an item to action_required.
+#
+# Term syntax: a plain phrase, case-insensitive, matched on word boundaries
+# with an optional plural "s"/"es"; spaces match any whitespace. A term that
+# starts with "re:" is a raw Python regular expression (case-insensitive); one
+# that starts with "re_cs:" is case-sensitive. Terms with Devanagari text are
+# matched as substrings because word boundaries do not apply to matras. A term
+# may also be written {name: <shown in reasons>, match: <term>}.
+
+text_scan_chars: 4000
+
 categories:
   action_required:
     priority: 1
-    terms:
+    label: Action required
+    title_terms:
       - consultation
-      - comments
-      - suggestions
+      - comment
+      - suggestion
+      - objection
       - stakeholder
-      - submission
-      - inputs
       - public hearing
+      - hearing on draft
+      - inputs
+      - feedback
+      - views invited
+      - {name: inviting, match: 're:\binviting\b'}
+      - {name: extension of last date, match: 're:\bextension of (?:the )?last date\b'}
+      - टिप्पणी
+      - सुझाव
+      - परामर्श
+      - हितधारक
+      - जन सुनवाई
+      - आपत्ति
   rules_and_regulation:
     priority: 2
-    terms:
-      - act
+    label: Rules and regulation
+    title_terms:
+      - {name: Act, match: 're_cs:\bActs?\b'}
+      - {name: act with year, match: 're:\bact,?\s+(?:19|20)\d\d\b'}
       - rule
       - regulation
       - amendment
       - gazette
       - notification
       - corrigendum
+      - corrigenda
       - statement of reasons
+      - ordinance
+      - {name: SOR, match: 're_cs:\bSOR\b'}
+      - अधिनियम
+      - नियम
+      - विनियम
+      - संशोधन
+      - राजपत्र
+      - शुद्धिपत्र
+      - अधिसूचना
   policy_and_direction:
     priority: 3
-    terms:
+    label: Policy and direction
+    title_terms:
       - policy
+      - policies
       - guideline
       - procedure
+      - standard operating procedure
+      - {name: SOP, match: 're_cs:\bSOPs?\b'}
       - statutory advice
       - direction
+      - directive
+      - advisory
+      - framework
+      - scheme
+      - office memorandum
+      - {name: O.M., match: 're_cs:\bO\.?M\.?\b'}
       - order
+      - नीति
+      - दिशानिर्देश
+      - दिशा-निर्देश
+      - प्रक्रिया
+      - निर्देश
+      - आदेश
   research_and_reporting:
     priority: 4
-    terms:
+    label: Research and reporting
+    title_terms:
       - report
       - study
+      - studies
       - discussion paper
       - working paper
+      - staff paper
+      - approach paper
+      - consultation paper
       - annual
       - monthly
       - quarterly
       - statistics
+      - statistical
       - index
+      - indices
+      - market monitoring
+      - survey
+      - bulletin
+      - रिपोर्ट
+      - प्रतिवेदन
+      - अध्ययन
+      - सांख्यिकी
+      - वार्षिक
+      - मासिक
   routine:
     priority: 5
-    terms:
+    label: Routine records
+    title_terms:
       - record of proceedings
-      - petition
+      - {name: ROP, match: 're_cs:\bROPs?\b'}
+      - cause list
+      - daily order
+      - advance list
+      - weekly list
+      - hearing schedule
+      - कार्यवाही का अभिलेख
+
+# Text terms that make an item action_required wherever they appear in the
+# scanned text (they describe an open invitation, not a topic).
+action_text_terms:
+  - name: comments invited
+    match: 're:\b(?:comments?|suggestions?|objections?|views|inputs|feedback)\b[^.\n]{0,80}\b(?:invited|solicited|sought|requested)\b'
+  - name: inviting comments
+    match: 're:\b(?:invites?|inviting|invited|solicits?|seeks?)\b[^.\n]{0,60}\b(?:comments?|suggestions?|objections?|views|inputs|feedback)\b'
+  - name: stakeholders requested
+    match: 're:\bstakeholders?\b[^.\n]{0,60}\b(?:requested|invited|may (?:send|submit|furnish))\b'
+  - name: public hearing to be held
+    match: 're:\bpublic hearing\b[^.\n]{0,60}\b(?:will be|shall be|is scheduled|to be)\b[^.\n]{0,20}\bheld\b'
+  - name: last date for comments
+    match: 're:\blast date\b[^.\n]{0,60}\b(?:comments?|suggestions?|objections?|submission)\b'
+  - टिप्पणियाँ आमंत्रित
+  - सुझाव आमंत्रित
+
+# Policy-significance terms. They lift an item out of the routine gate; the
+# item is then classified by the normal steps, and an item no other rule
+# matches becomes `promoted_default`.
+promote:
+  promoted_default: policy_and_direction
+  terms:
+    - {name: suo motu, match: 're:\bsuo[\s-]*mot[ou]\b'}
+    - draft regulation
+    - {name: regulations with year, match: 're:\bregulations?,?\s+(?:19|20)\d\d\b'}
+    - statement of reasons
+    - public hearing
+    - staff paper
+    - approach paper
+    - discussion paper
+    - consultation
+    - comment
+    - suggestion
+    - stakeholder
+    - removal of difficulty
+    - policy
+    - guideline
+    - statutory advice
+    - general network access
+    - market coupling
+
+# Feeds whose items are routine, high-volume records (D-001 compact appendix).
+routine_feeds:
+  - cerc_recent_orders
+  - cerc_order_archives
+  - cerc_recent_rops
+  - cerc_rop_archives
+  - cerc_hearing_schedule
+
+# Category used when no title term matches, by feed.
+feed_defaults:
+  cerc_draft_regulations: rules_and_regulation
+  cerc_current_regulations: rules_and_regulation
+  cerc_public_hearings: action_required
+  cerc_statutory_public_notices: action_required
+  cerc_statutory_advice: policy_and_direction
+  cerc_discussion_papers: research_and_reporting
+  cerc_working_papers: research_and_reporting
+  cerc_study_reports: research_and_reporting
+  cerc_market_monitoring: research_and_reporting
+  cerc_annual_reports: research_and_reporting
+  cerc_other_reports: research_and_reporting
+  coal_acts_rules_policies: rules_and_regulation
+  coal_sop: policy_and_direction
+  coal_csr_guidelines: policy_and_direction
+  coal_central_schemes: policy_and_direction
+  coal_action_plans: policy_and_direction
+  coal_monthly_statistics: research_and_reporting
+  coal_statistical_reports: research_and_reporting
+  coal_quarterly_reports: research_and_reporting
+  coal_rsr_reports: research_and_reporting
+  coal_coal_statistics: research_and_reporting
+  coal_sustainability_reports: research_and_reporting
+  coal_national_coal_index: research_and_reporting
+  coal_national_lignite_index: research_and_reporting
+  coal_annual_reports: research_and_reporting
+  coal_budget_reports: research_and_reporting
+  coal_other_reports: research_and_reporting
+  coal_monthly_cabinet_reports: research_and_reporting
+  coal_cabinet_summaries: research_and_reporting
+
+# Fallback site lookup for source-health rows of feeds with no records yet.
+feed_site_prefixes:
+  mop_: ministry_of_power
+  coal_: ministry_of_coal
+  cerc_: cerc

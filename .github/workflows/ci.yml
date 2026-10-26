@@ -1,0 +1,33 @@
+# Deterministic checks for code changes. Uses no secrets and never touches tracker-data.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install ".[dev]"
+
+      - name: Lint
+        run: ruff check src tests
+
+      - name: Validate configuration
+        run: policy-tracker validate-config --config config/sources.yaml
+
+      - name: Test
+        run: python -m pytest -q
